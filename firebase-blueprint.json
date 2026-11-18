@@ -1,0 +1,863 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public staff profile and role assignment without PII email.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["head", "teacher"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "pending", "disabled"]
+        },
+        "assignedClasses": {
+          "type": "array",
+          "description": "Classes assigned to this staff member (max 4)."
+        },
+        "fullName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Staff full legal name."
+        },
+        "nickname": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Preferred nickname or sensei call name."
+        },
+        "avatarDataUrl": {
+          "type": "string",
+          "maxLength": 180000,
+          "description": "Compressed profile avatar image data URL."
+        },
+        "profileCompleted": {
+          "type": "boolean",
+          "description": "Whether initial profile setup has been completed."
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Most recent authenticated login timestamp."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "role", "status", "assignedClasses", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII document storing staff email address.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email", "updatedAt"]
+    },
+    "StaffInvite": {
+      "title": "StaffInvite",
+      "description": "Pre-authorized staff invite keyed by lowercase email.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["head", "teacher"]
+        },
+        "assignedClasses": {
+          "type": "array"
+        },
+        "createdBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email", "displayName", "role", "assignedClasses", "createdBy", "createdAt"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Enrolled student belonging to one of the four classes.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "studentCode": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "classId": {
+          "type": "string",
+          "enum": ["hokkaido", "saitama", "nara", "kaigo"]
+        },
+        "targetGoal": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["name", "studentCode", "classId", "targetGoal", "active", "notes", "createdBy", "createdAt", "updatedAt"]
+    },
+    "DailyReport": {
+      "title": "DailyReport",
+      "description": "Teacher daily class report (日報).",
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "maxLength": 10
+        },
+        "classId": {
+          "type": "string",
+          "enum": ["hokkaido", "saitama", "nara", "kaigo"]
+        },
+        "teacherUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "teacherName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "totalStudents": {
+          "type": "number"
+        },
+        "presentCount": {
+          "type": "number"
+        },
+        "absentNames": {
+          "type": "array"
+        },
+        "lateNames": {
+          "type": "array"
+        },
+        "kanaProgress": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "textbookUnit": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "examPractice": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "conversationTopic": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "kaigoTopic": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "homework": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "atmosphere": {
+          "type": "number"
+        },
+        "issues": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "tomorrowPlan": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "overallComment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "studentNotes": {
+          "type": "array"
+        },
+        "approvalStatus": {
+          "type": "string",
+          "enum": ["pending", "approved", "revision_needed"]
+        },
+        "headFeedback": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "approvedBy": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "approvedAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "commentedAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "commentReadByTeacher": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "date",
+        "classId",
+        "teacherUid",
+        "teacherName",
+        "totalStudents",
+        "presentCount",
+        "absentNames",
+        "lateNames",
+        "kanaProgress",
+        "textbookUnit",
+        "examPractice",
+        "conversationTopic",
+        "kaigoTopic",
+        "homework",
+        "atmosphere",
+        "issues",
+        "tomorrowPlan",
+        "overallComment",
+        "studentNotes",
+        "approvalStatus",
+        "headFeedback",
+        "approvedBy",
+        "approvedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "description": "Editable school schedule managed by the Head of School for viewing and printing.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "periodLabel": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "rows": {
+          "type": "array",
+          "description": "Schedule entries including optional teacherUid linking each entry to its assigned sensei."
+        },
+        "updatedBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["title", "periodLabel", "rows", "updatedBy", "createdAt", "updatedAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Question bank item with answer key.",
+      "type": "object",
+      "properties": {
+        "classId": {
+          "type": "string",
+          "enum": ["hokkaido", "saitama", "nara", "kaigo", "all"]
+        },
+        "category": {
+          "type": "string",
+          "enum": ["kana", "vocab", "kanji", "grammar", "reading", "listening", "conversation", "kaigo", "jlpt_jft"]
+        },
+        "testType": {
+          "type": "string",
+          "enum": ["daily", "weekly"]
+        },
+        "questionFormat": {
+          "type": "string",
+          "enum": ["multiple_choice", "written"]
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "options": {
+          "type": "array"
+        },
+        "correctAnswer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "points": {
+          "type": "number"
+        },
+        "chapterGroup": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Chapter or lesson group name (e.g., Bab 6, Irodori L3, Choukai 1)."
+        },
+        "audioDataUrl": {
+          "type": "string",
+          "maxLength": 750000,
+          "description": "Optional base64 audio data URL for Choukai listening questions."
+        },
+        "audioFileName": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Original filename of uploaded Choukai audio."
+        },
+        "reviewStatus": {
+          "type": "string",
+          "enum": ["draft", "pending", "approved", "rejected"]
+        },
+        "reviewReason": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "reviewedBy": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "reviewedAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "classId",
+        "category",
+        "testType",
+        "questionFormat",
+        "prompt",
+        "options",
+        "correctAnswer",
+        "explanation",
+        "points",
+        "chapterGroup",
+        "audioDataUrl",
+        "audioFileName",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TestSheet": {
+      "title": "TestSheet",
+      "description": "Printable test sheet composed of Question Bank IDs.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "classId": {
+          "type": "string",
+          "enum": ["hokkaido", "saitama", "nara", "kaigo"]
+        },
+        "testType": {
+          "type": "string",
+          "enum": ["daily", "weekly"]
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "maxLength": 10
+        },
+        "weekKey": {
+          "type": "string",
+          "pattern": "^\\d{4}-W\\d{2}$",
+          "maxLength": 12
+        },
+        "questionIds": {
+          "type": "array"
+        },
+        "totalPoints": {
+          "type": "number"
+        },
+        "createdBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdByName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "title",
+        "classId",
+        "testType",
+        "date",
+        "weekKey",
+        "questionIds",
+        "totalPoints",
+        "createdBy",
+        "createdByName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TestResult": {
+      "title": "TestResult",
+      "description": "Student test score from Answer-Key ○/× checking or manual entry.",
+      "type": "object",
+      "properties": {
+        "studentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "studentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "classId": {
+          "type": "string",
+          "enum": ["hokkaido", "saitama", "nara", "kaigo"]
+        },
+        "testType": {
+          "type": "string",
+          "enum": ["daily", "weekly"]
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "maxLength": 10
+        },
+        "weekKey": {
+          "type": "string",
+          "pattern": "^\\d{4}-W\\d{2}$",
+          "maxLength": 12
+        },
+        "sheetId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "testTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "entryMode": {
+          "type": "string",
+          "enum": ["answer_key", "manual"]
+        },
+        "earnedScore": {
+          "type": "number"
+        },
+        "maxScore": {
+          "type": "number"
+        },
+        "scorePercent": {
+          "type": "number"
+        },
+        "questionOutcomes": {
+          "type": "array"
+        },
+        "wrongCategories": {
+          "type": "array"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "gradedBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "gradedByName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "studentId",
+        "studentName",
+        "classId",
+        "testType",
+        "date",
+        "weekKey",
+        "sheetId",
+        "testTitle",
+        "category",
+        "entryMode",
+        "earnedScore",
+        "maxScore",
+        "scorePercent",
+        "questionOutcomes",
+        "wrongCategories",
+        "note",
+        "gradedBy",
+        "gradedByName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit trail recording who changed roles, schedules, or school data and when.",
+      "type": "object",
+      "properties": {
+        "actorUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "actorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "actionType": {
+          "type": "string",
+          "enum": [
+            "role_change", "user_add", "user_remove", "schedule_update",
+            "data_create", "data_update", "data_delete", "report_review",
+            "question_approve", "question_reject", "announcement_create",
+            "weekly_report_submit", "alert_handle", "threshold_update"
+          ]
+        },
+        "targetType": {
+          "type": "string",
+          "enum": [
+            "user", "schedule", "student", "report", "weeklyReport",
+            "question", "sheet", "testResult", "announcement", "alert", "settings"
+          ]
+        },
+        "targetLabel": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["actorUid", "actorName", "actionType", "targetType", "targetLabel", "detail", "createdAt"]
+    },
+    "WeeklyReport": {
+      "title": "WeeklyReport",
+      "description": "Sensei weekly report per class per week with per-student progress & attitude ratings.",
+      "type": "object",
+      "properties": {
+        "weekKey": { "type": "string", "pattern": "^\\d{4}-W\\d{2}$", "maxLength": 12 },
+        "classId": { "type": "string", "enum": ["hokkaido", "saitama", "nara", "kaigo"] },
+        "teacherUid": { "type": "string", "maxLength": 128 },
+        "teacherName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "status": { "type": "string", "enum": ["draft", "submitted"] },
+        "submittedAt": { "type": "string", "maxLength": 40 },
+        "summaryTaught": { "type": "string", "maxLength": 1500 },
+        "classProgress": { "type": "string", "maxLength": 1000 },
+        "issues": { "type": "string", "maxLength": 1000 },
+        "nextWeekPlan": { "type": "string", "maxLength": 1000 },
+        "studentEntries": { "type": "array" },
+        "headComment": { "type": "string", "maxLength": 1500 },
+        "headCommentBy": { "type": "string", "maxLength": 100 },
+        "headCommentAt": { "type": "string", "maxLength": 40 },
+        "commentReadByTeacher": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "weekKey", "classId", "teacherUid", "teacherName", "status", "submittedAt",
+        "summaryTaught", "classProgress", "issues", "nextWeekPlan", "studentEntries",
+        "headComment", "headCommentBy", "headCommentAt", "commentReadByTeacher", "createdAt", "updatedAt"
+      ]
+    },
+    "HeadJournal": {
+      "title": "HeadJournal",
+      "description": "Admin-only private Head Master Journal (Catatan Kepala Sekolah).",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "maxLength": 10 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "category": { "type": "string", "enum": ["decision", "meeting", "incident", "idea", "evaluation", "todo"] },
+        "content": { "type": "string", "maxLength": 4000 },
+        "relatedClassId": { "type": "string", "maxLength": 20 },
+        "relatedTeacherUid": { "type": "string", "maxLength": 128 },
+        "relatedTeacherName": { "type": "string", "maxLength": 100 },
+        "relatedStudentId": { "type": "string", "maxLength": 128 },
+        "relatedStudentName": { "type": "string", "maxLength": 120 },
+        "attachmentName": { "type": "string", "maxLength": 150 },
+        "attachmentDataUrl": { "type": "string", "maxLength": 250000 },
+        "pinned": { "type": "boolean" },
+        "todoItems": { "type": "array" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "date", "title", "category", "content", "relatedClassId", "relatedTeacherUid",
+        "relatedTeacherName", "relatedStudentId", "relatedStudentName", "attachmentName",
+        "attachmentDataUrl", "pinned", "todoItems", "createdBy", "createdAt", "updatedAt"
+      ]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Admin announcement broadcast shown on dashboards.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "pinned": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "pinned", "createdBy", "createdByName", "createdAt", "updatedAt"]
+    },
+    "AnnouncementRead": {
+      "title": "AnnouncementRead",
+      "description": "Read receipt linking an announcement ID and staff UID.",
+      "type": "object",
+      "properties": {
+        "annId": { "type": "string", "maxLength": 128 },
+        "uid": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "readAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["annId", "uid", "name", "readAt"]
+    },
+    "QualityThresholds": {
+      "title": "QualityThresholds",
+      "description": "Admin-configurable alert thresholds and ranking weights.",
+      "type": "object",
+      "properties": {
+        "minWeeklyAvgThreshold": { "type": "number" },
+        "consecutiveDropWeeks": { "type": "number" },
+        "maxAbsentDays": { "type": "number" },
+        "minAttitudeThreshold": { "type": "number" },
+        "examWeightPercent": { "type": "number" },
+        "attitudeWeightPercent": { "type": "number" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "minWeeklyAvgThreshold", "consecutiveDropWeeks", "maxAbsentDays",
+        "minAttitudeThreshold", "examWeightPercent", "attitudeWeightPercent", "updatedBy", "updatedAt"
+      ]
+    },
+    "HandledAlert": {
+      "title": "HandledAlert",
+      "description": "Record of an at-risk student alert marked handled by admin.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "classId": { "type": "string", "enum": ["hokkaido", "saitama", "nara", "kaigo"] },
+        "alertKey": { "type": "string", "enum": ["score_drop", "low_avg", "frequent_absence", "low_attitude"] },
+        "reasonSummary": { "type": "string", "maxLength": 300 },
+        "note": { "type": "string", "maxLength": 500 },
+        "handledBy": { "type": "string", "maxLength": 128 },
+        "handledByName": { "type": "string", "maxLength": 100 },
+        "handledAt": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "studentId", "studentName", "classId", "alertKey", "reasonSummary", "note",
+        "handledBy", "handledByName", "handledAt", "createdAt", "updatedAt"
+      ]
+    },
+    "StudentProfileNote": {
+      "title": "StudentProfileNote",
+      "description": "Individual student coaching note visible on Student Profile Page.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "enum": ["hokkaido", "saitama", "nara", "kaigo"] },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 100 },
+        "authorRole": { "type": "string", "enum": ["head", "teacher"] },
+        "note": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "classId", "authorUid", "authorName", "authorRole", "note", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Staff user profile and role metadata."
+    },
+    "/users/{userId}/private/info": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Private PII document for staff email."
+    },
+    "/staffInvites/{inviteEmail}": {
+      "schema": { "$ref": "#/entities/StaffInvite" },
+      "description": "Pre-authorized staff invite documents keyed by email."
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Class student roster."
+    },
+    "/dailyReports/{reportId}": {
+      "schema": { "$ref": "#/entities/DailyReport" },
+      "description": "Daily class reports submitted by sensei."
+    },
+    "/weeklyReports/{reportId}": {
+      "schema": { "$ref": "#/entities/WeeklyReport" },
+      "description": "Weekly class reports with attitude scores submitted by sensei."
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/Question" },
+      "description": "Question bank items with answer keys and review status."
+    },
+    "/testSheets/{sheetId}": {
+      "schema": { "$ref": "#/entities/TestSheet" },
+      "description": "Printable daily and weekly tests built from Question Bank."
+    },
+    "/testResults/{resultId}": {
+      "schema": { "$ref": "#/entities/TestResult" },
+      "description": "Student test scores and per-question outcomes."
+    },
+    "/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/Schedule" },
+      "description": "Editable school schedule managed by the Head of School."
+    },
+    "/headJournal/{entryId}": {
+      "schema": { "$ref": "#/entities/HeadJournal" },
+      "description": "Admin-only private Head Master Journal."
+    },
+    "/announcements/{annId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "School-wide announcements posted by admin."
+    },
+    "/announcementReads/{readId}": {
+      "schema": { "$ref": "#/entities/AnnouncementRead" },
+      "description": "Announcement read receipts per staff user."
+    },
+    "/qualitySettings/{settingId}": {
+      "schema": { "$ref": "#/entities/QualityThresholds" },
+      "description": "Admin-configured quality thresholds and ranking weights."
+    },
+    "/handledAlerts/{alertId}": {
+      "schema": { "$ref": "#/entities/HandledAlert" },
+      "description": "Admin-handled student alerts with notes."
+    },
+    "/studentNotes/{noteId}": {
+      "schema": { "$ref": "#/entities/StudentProfileNote" },
+      "description": "Notes posted on individual student profiles."
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Immutable admin-only activity audit log."
+    }
+  }
+}

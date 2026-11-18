@@ -1,0 +1,6 @@
+{
+  "name": "Nihongo Gakkou Ops — 日報・テスト管理システム",
+  "description": "Japanese language school (送り出し機関) daily teacher report, question bank, printable answer-key grading, and 4-class head dashboard in Japanese & Indonesian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
