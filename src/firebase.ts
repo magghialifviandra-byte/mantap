@@ -8,7 +8,8 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export const HEAD_EMAIL = 'magghialifviandra@gmail.com';
+export const HEAD_EMAIL = 'alifmagghi5@gmail.com';
+export const HEAD_EMAILS = ['alifmagghi5@gmail.com', 'magghialifviandra@gmail.com'];
 
 export function inviteDocIdForEmail(email: string): string {
   return email.trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');

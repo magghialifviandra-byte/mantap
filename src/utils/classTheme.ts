@@ -58,8 +58,8 @@ export const CLASS_THEMES: Record<ClassId, ClassThemeStyle> = {
   },
 };
 
-export function getClassTheme(classId: ClassId | 'all'): ClassThemeStyle | null {
-  if (classId === 'all') return null;
+export function getClassTheme(classId: ClassId | 'all' | ''): ClassThemeStyle | null {
+  if (classId === 'all' || classId === '') return null;
   return CLASS_THEMES[classId] || null;
 }
 

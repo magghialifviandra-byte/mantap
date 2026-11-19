@@ -1,0 +1,13 @@
+{
+  "source": "aehlke/jlpt-classifier (core N5-N1) + jmdict-eng-3.3.1",
+  "totalUnique": 7998,
+  "missingFromJmdict": 31,
+  "counts": {
+    "N5": 738,
+    "N4": 673,
+    "N3": 1616,
+    "N2": 1905,
+    "N1": 3066
+  },
+  "generatedAt": "2026-11-19T03:01:59.008Z"
+}

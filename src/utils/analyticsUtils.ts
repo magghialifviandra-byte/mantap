@@ -346,7 +346,7 @@ export function computeAtRiskAlerts(params: {
   const alerts: ComputedStudentAlert[] = [];
 
   students
-    .filter((s) => s.active)
+    .filter((s) => s.active && Boolean(s.classId))
     .forEach((stu) => {
       const weeklyByWeek = getOfficialWeeklyScoreByWeek(stu.id, testResults);
       const classReports = reports.filter((r) => r.classId === stu.classId);
@@ -499,7 +499,7 @@ export function buildWeeklyRankingRows(params: {
   const prevWeekKey = targetWeekIdx > 0 ? allWeekKeys[targetWeekIdx - 1] : null;
 
   const filteredStudents = students.filter(
-    (s) => s.active && (classFilter === 'all' ? true : s.classId === classFilter)
+    (s) => s.active && Boolean(s.classId) && (classFilter === 'all' ? true : s.classId === classFilter)
   );
 
   const rows: WeeklyRankingRow[] = filteredStudents.map((stu) => {
@@ -617,6 +617,7 @@ export function isStudentAccessibleToUser(
   scheduleRows: ScheduleRow[]
 ): boolean {
   if (profile.role === 'head') return true;
+  if (!stu.classId) return false;
   if ((profile.assignedClasses || []).includes(stu.classId)) return true;
   const classInfo = CLASSES.find((c) => c.id === stu.classId);
   const classNames = [stu.classId, classInfo?.nameJa || '', classInfo?.nameId || ''].map((x) =>

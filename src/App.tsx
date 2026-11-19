@@ -23,10 +23,12 @@ import {
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import {
+  LiquidToast,
   SkeletonLoadingShell,
   ThemeModeToggle,
   ThemePreference,
 } from './components/AnimatedPrimitives';
+import { AdminSettingsView } from './components/AdminSettingsView';
 import { AnnouncementsPanel } from './components/AnnouncementsPanel';
 import {
   AppleFooter,
@@ -40,6 +42,7 @@ import {
   runViewTransition,
   triggerHaptic,
 } from './components/AppleGestures';
+import { CertificateVerifyPage } from './components/CertificateVerifyPage';
 import { CommandPaletteModal, JumpTarget } from './components/CommandPaletteModal';
 import { DailyReportForm } from './components/DailyReportForm';
 import { HeadDashboard } from './components/HeadDashboard';
@@ -47,6 +50,7 @@ import { HeadJournalView } from './components/HeadJournalView';
 import { ProfileSetupModal } from './components/ProfileSetupModal';
 import { OfflineBanner } from './components/PWAInstallButton';
 import { QuestionBankManager } from './components/QuestionBankManager';
+import { ReportCardsWorkspace } from './components/ReportCardsWorkspace';
 import { RosterAndStaff } from './components/RosterAndStaff';
 import { ScheduleWorkspace } from './components/ScheduleWorkspace';
 import { SenseiMonitoringView } from './components/SenseiMonitoringView';
@@ -58,7 +62,7 @@ import {
   auth,
   db,
   handleFirestoreError,
-  HEAD_EMAIL,
+  HEAD_EMAILS,
   inviteDocIdForEmail,
   OperationType,
   signInWithGooglePopup,
@@ -69,27 +73,33 @@ import {
   ActivityLogEntry,
   Announcement,
   AnnouncementRead,
+  CertificateRecord,
   ClassId,
   CLASSES,
   DailyReport,
   DEFAULT_QUALITY_THRESHOLDS,
+  DEFAULT_SCHOOL_SETTINGS,
   HandledAlert,
   HeadJournalEntry,
   LanguageMode,
   QualityThresholds,
   QuestionItem,
   QuestionReviewStatus,
+  ReportCard,
   ScheduleDoc,
+  SchoolSettings,
   StaffInvite,
   Student,
   StudentProfileNote,
   TestResult,
   TestSheet,
   UserProfile,
+  VocabTranslationOverride,
   WeeklyReport,
 } from './types';
 import { getClassTheme } from './utils/classTheme';
 import { getTodayDateStr } from './utils/dateUtils';
+import { runOneTimeStudentSeedIfAdmin } from './utils/oneTimeStudentSeed';
 import { clampArray, clampStr } from './utils/payloadGuards';
 
 type NavTab = AppleNavTab;
@@ -97,6 +107,19 @@ type NavTab = AppleNavTab;
 const CAMPUS_IMAGE_URL = '/src/assets/images/genki_academy_campus_1794986337681.jpg';
 
 export default function App() {
+  const verifyParam =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('verify')
+      : null;
+
+  if (verifyParam) {
+    return <CertificateVerifyPage certNumber={verifyParam} />;
+  }
+
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const shouldReduce = useReducedMotion();
   const [lang, setLang] = useState<LanguageMode>('ja');
   const [theme, setTheme] = useState<ThemePreference>(() => {
@@ -143,8 +166,13 @@ export default function App() {
   const [staffUsers, setStaffUsers] = useState<UserProfile[]>([]);
   const [staffInvites, setStaffInvites] = useState<StaffInvite[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
+  const [schoolSettings, setSchoolSettings] = useState<SchoolSettings>(DEFAULT_SCHOOL_SETTINGS);
+  const [reportCards, setReportCards] = useState<ReportCard[]>([]);
+  const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
+  const [vocabOverrides, setVocabOverrides] = useState<VocabTranslationOverride[]>([]);
 
   const [printNode, setPrintNode] = useState<React.ReactNode | null>(null);
+  const [seedToast, setSeedToast] = useState('');
   const loggedSessionUidRef = useRef<string | null>(null);
 
   // Sync light/dark theme preference + system media query
@@ -192,7 +220,7 @@ export default function App() {
 
         if (!snap.exists()) {
           const email = (fbUser.email || '').trim().toLowerCase();
-          const isHeadAccount = email === HEAD_EMAIL && fbUser.emailVerified;
+          const isHeadAccount = HEAD_EMAILS.includes(email) && fbUser.emailVerified;
           const displayName = clampStr(
             fbUser.displayName || email.split('@')[0] || 'Sensei',
             100
@@ -279,7 +307,8 @@ export default function App() {
               prev === 'dashboard' ||
               prev === 'monitoring' ||
               prev === 'journal' ||
-              prev === 'users'
+              prev === 'users' ||
+              prev === 'settings'
                 ? 'report'
                 : prev
             );
@@ -300,23 +329,57 @@ export default function App() {
     return () => unsub();
   }, [authReady, user]);
 
+  // 2b. One-time Admin Student Seed (self-disabling via systemMigrations doc)
+  useEffect(() => {
+    if (!authReady || !user || !profile || profile.status !== 'active' || profile.role !== 'head') {
+      return;
+    }
+    let cancelled = false;
+    void runOneTimeStudentSeedIfAdmin(profile).then((res) => {
+      if (cancelled || !res || !res.executed) return;
+      const msg =
+        lang === 'ja'
+          ? `未配属学生 ${res.addedCount}名を登録しました（スキップ: ${res.skippedCount}名）`
+          : lang === 'id'
+          ? `${res.addedCount} siswa ditambahkan ke Unassigned (${res.skippedCount} duplikat dilewati)`
+          : `${res.addedCount} students imported (${res.skippedCount} skipped)`;
+      setSeedToast(msg);
+      window.setTimeout(() => setSeedToast(''), 6000);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user, profile?.status, profile?.role, profile?.uid, lang]);
+
   // 3. School Data Listeners (ONLY when authenticated & active)
   useEffect(() => {
     if (!authReady || !user || !profile || profile.status !== 'active') return;
 
     const unsubs: (() => void)[] = [];
+    const assignedClasses = (profile.assignedClasses || []).slice(0, 4);
 
-    unsubs.push(
-      onSnapshot(
-        collection(db, 'students'),
-        (snap) => {
-          setStudents(
-            snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Student, 'id'>) }))
-          );
-        },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'students')
-      )
-    );
+    if (profile.role === 'head' || assignedClasses.length > 0) {
+      const studentsSource =
+        profile.role === 'head'
+          ? collection(db, 'students')
+          : assignedClasses.length === 1
+          ? query(collection(db, 'students'), where('classId', '==', assignedClasses[0]))
+          : query(collection(db, 'students'), where('classId', 'in', assignedClasses));
+
+      unsubs.push(
+        onSnapshot(
+          studentsSource,
+          (snap) => {
+            setStudents(
+              snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Student, 'id'>) }))
+            );
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'students')
+        )
+      );
+    } else {
+      setStudents([]);
+    }
 
     const reportsSource =
       profile.role === 'head'
@@ -358,6 +421,21 @@ export default function App() {
           );
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'questions')
+      )
+    );
+
+    unsubs.push(
+      onSnapshot(
+        collection(db, 'vocabOverrides'),
+        (snap) => {
+          setVocabOverrides(
+            snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<VocabTranslationOverride, 'id'>),
+            }))
+          );
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'vocabOverrides')
       )
     );
 
@@ -449,20 +527,92 @@ export default function App() {
       )
     );
 
+    if (profile.role === 'head' || assignedClasses.length > 0) {
+      const studentNotesSource =
+        profile.role === 'head'
+          ? collection(db, 'studentNotes')
+          : assignedClasses.length === 1
+          ? query(collection(db, 'studentNotes'), where('classId', '==', assignedClasses[0]))
+          : query(collection(db, 'studentNotes'), where('classId', 'in', assignedClasses));
+
+      unsubs.push(
+        onSnapshot(
+          studentNotesSource,
+          (snap) => {
+            setStudentNotes(
+              snap.docs.map((d) => ({
+                id: d.id,
+                ...(d.data() as Omit<StudentProfileNote, 'id'>),
+              }))
+            );
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotes')
+        )
+      );
+    } else {
+      setStudentNotes([]);
+    }
+
     unsubs.push(
       onSnapshot(
-        collection(db, 'studentNotes'),
+        doc(db, 'schoolSettings', 'default'),
         (snap) => {
-          setStudentNotes(
-            snap.docs.map((d) => ({
-              id: d.id,
-              ...(d.data() as Omit<StudentProfileNote, 'id'>),
-            }))
-          );
+          if (snap.exists()) {
+            const raw = snap.data() as Partial<SchoolSettings>;
+            setSchoolSettings({
+              ...DEFAULT_SCHOOL_SETTINGS,
+              ...raw,
+            });
+          } else {
+            setSchoolSettings(DEFAULT_SCHOOL_SETTINGS);
+          }
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotes')
+        (err) => handleFirestoreError(err, OperationType.GET, 'schoolSettings/default')
       )
     );
+
+    if (profile.role === 'head' || assignedClasses.length > 0) {
+      const reportCardsSource =
+        profile.role === 'head'
+          ? collection(db, 'reportCards')
+          : assignedClasses.length === 1
+          ? query(collection(db, 'reportCards'), where('classId', '==', assignedClasses[0]))
+          : query(collection(db, 'reportCards'), where('classId', 'in', assignedClasses));
+
+      unsubs.push(
+        onSnapshot(
+          reportCardsSource,
+          (snap) => {
+            setReportCards(
+              snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ReportCard, 'id'>) }))
+            );
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'reportCards')
+        )
+      );
+
+      const certificatesSource =
+        profile.role === 'head'
+          ? collection(db, 'certificates')
+          : assignedClasses.length === 1
+          ? query(collection(db, 'certificates'), where('classId', '==', assignedClasses[0]))
+          : query(collection(db, 'certificates'), where('classId', 'in', assignedClasses));
+
+      unsubs.push(
+        onSnapshot(
+          certificatesSource,
+          (snap) => {
+            setCertificates(
+              snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CertificateRecord, 'id'>) }))
+            );
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'certificates')
+        )
+      );
+    } else {
+      setReportCards([]);
+      setCertificates([]);
+    }
 
     if (profile.role === 'head') {
       unsubs.push(
@@ -527,7 +677,7 @@ export default function App() {
     }
 
     return () => unsubs.forEach((u) => u());
-  }, [authReady, user, profile?.status, profile?.role]);
+  }, [authReady, user, profile?.status, profile?.role, (profile?.assignedClasses || []).join(',')]);
 
   // Sensei missing today's daily report gentle reminder
   const senseiMissingReportToday = useMemo(() => {
@@ -864,6 +1014,8 @@ export default function App() {
     if (activeTab === 'dashboard') return lang === 'id' ? 'Dashboard' : '統括ダッシュボード';
     if (activeTab === 'monitoring') return tr(UI_TEXT.navMonitoring, lang);
     if (activeTab === 'report') return tr(UI_TEXT.navReportHub, lang);
+    if (activeTab === 'reportCards')
+      return lang === 'id' ? 'Rapor & Sertifikat Kelulusan' : '成績通知表・修了証書';
     if (activeTab === 'bank') return tr(UI_TEXT.navQuestionBank, lang);
     if (activeTab === 'grading') return tr(UI_TEXT.navGrading, lang);
     if (activeTab === 'roster') return tr(UI_TEXT.navRoster, lang);
@@ -874,6 +1026,8 @@ export default function App() {
         ? 'Jadwal Sekolah'
         : 'スケジュール管理';
     if (activeTab === 'journal') return tr(UI_TEXT.navHeadJournal, lang);
+    if (activeTab === 'settings')
+      return lang === 'id' ? 'Pengaturan Rapor & Sertifikat' : '通知表・修了証書設定';
     return tr(UI_TEXT.navUsers, lang);
   })();
 
@@ -969,6 +1123,7 @@ export default function App() {
         }}
       >
         <OfflineBanner lang={lang} />
+        <LiquidToast message={seedToast} />
 
         {/* Apple.com 44px Global Nav + Hover/Keyboard Full-Width Mega Menu */}
         <AppleGlobalNav
@@ -1089,6 +1244,9 @@ export default function App() {
                   thresholds={thresholds}
                   handledAlerts={handledAlerts}
                   scheduleDoc={scheduleDoc}
+                  reportCards={reportCards}
+                  certificates={certificates}
+                  schoolSettings={schoolSettings}
                   onNavigateTab={(tab) => navigateTab(tab)}
                   onOpenPendingQuestions={() =>
                     navigateTab('bank', { bankPending: true })
@@ -1140,6 +1298,7 @@ export default function App() {
                   profile={profile}
                   questions={questions}
                   testSheets={testSheets}
+                  vocabOverrides={vocabOverrides}
                   initialReviewFilter={bankReviewFilter}
                   onStartGradingSheet={(sheetId) => {
                     setGradingSheetId(sheetId);
@@ -1197,6 +1356,23 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'reportCards' && (
+                <ReportCardsWorkspace
+                  lang={lang}
+                  profile={profile}
+                  students={students}
+                  staffUsers={staffUsers}
+                  testResults={testResults}
+                  dailyReports={reports}
+                  weeklyReports={weeklyReports}
+                  reportCards={reportCards}
+                  certificates={certificates}
+                  schoolSettings={schoolSettings}
+                  thresholds={thresholds}
+                  onRegisterPrintView={(node) => setPrintNode(node)}
+                />
+              )}
+
               {activeTab === 'users' && profile.role === 'head' && (
                 <UsersRolesView
                   lang={lang}
@@ -1204,6 +1380,15 @@ export default function App() {
                   staffUsers={staffUsers}
                   staffInvites={staffInvites}
                   activityLogs={activityLogs}
+                />
+              )}
+
+              {activeTab === 'settings' && profile.role === 'head' && (
+                <AdminSettingsView
+                  lang={lang}
+                  profile={profile}
+                  schoolSettings={schoolSettings}
+                  thresholds={thresholds}
                 />
               )}
             </motion.div>
@@ -1214,10 +1399,13 @@ export default function App() {
         <AppleFooter lang={lang} profile={profile} onNavigate={navigateTab} />
       </div>
 
-      {/* Student Profile Modal (Weekly Exam Primary + Daily Secondary + Attitude + Coaching Notes) */}
+      {/* Student Profile Modal (Weekly Exam Primary + Daily Secondary + Attitude + Coaching Notes + Documents) */}
       {selectedProfileStudent && profile && (
         <StudentProfileModal
-          student={selectedProfileStudent}
+          student={
+            students.find((s) => s.id === selectedProfileStudent.id) ||
+            selectedProfileStudent
+          }
           lang={lang}
           profile={profile}
           reports={reports}
@@ -1227,6 +1415,10 @@ export default function App() {
           scheduleRows={scheduleDoc?.rows || []}
           thresholds={thresholds}
           handledAlerts={handledAlerts}
+          reportCards={reportCards}
+          certificates={certificates}
+          schoolSettings={schoolSettings}
+          onRegisterPrintView={(node) => setPrintNode(node)}
           onClose={() => setSelectedProfileStudent(null)}
         />
       )}

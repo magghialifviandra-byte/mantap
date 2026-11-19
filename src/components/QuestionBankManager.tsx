@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import {
   AlertCircle,
+  BookOpen,
   Check,
   CheckSquare,
   ChevronDown,
@@ -44,6 +45,7 @@ import {
   TestSheet,
   TestType,
   UserProfile,
+  VocabTranslationOverride,
 } from '../types';
 import { logActivity } from '../utils/activityLog';
 import { effectiveQuestionStatus } from '../utils/analyticsUtils';
@@ -58,12 +60,15 @@ import {
   SwipeableMobileRow,
 } from './AppleGestures';
 import { ConfirmDialog } from './ConfirmDialog';
+import { FuriganaText } from './FuriganaText';
+import { VocabGeneratorModal } from './VocabGeneratorModal';
 
 interface Props {
   lang: LanguageMode;
   profile: UserProfile;
   questions: QuestionItem[];
   testSheets: TestSheet[];
+  vocabOverrides?: VocabTranslationOverride[];
   initialReviewFilter?: QuestionReviewStatus | 'all';
   onStartGradingSheet: (sheetId: string) => void;
   onRegisterPrintView: (node: React.ReactNode | null) => void;
@@ -107,11 +112,13 @@ export function QuestionBankManager({
   profile,
   questions,
   testSheets,
+  vocabOverrides = [],
   initialReviewFilter,
   onStartGradingSheet,
   onRegisterPrintView,
 }: Props) {
   const isHead = profile.role === 'head';
+  const [showVocabGenerator, setShowVocabGenerator] = useState(false);
   // Question creation form
   const [qClass, setQClass] = useState<ClassId | 'all'>('hokkaido');
   const [qCategory, setQCategory] = useState<QuestionCategory>('vocab');
@@ -854,7 +861,9 @@ export function QuestionBankManager({
                 <div className="flex items-start justify-between gap-4">
                   <div className="text-sm font-semibold text-black">
                     <span className="font-mono mr-2">Q{idx + 1}.</span>
-                    <span className="whitespace-pre-line">{q.prompt}</span>
+                    <span className="whitespace-pre-line">
+                      <FuriganaText text={q.prompt} />
+                    </span>
                   </div>
                   <span className="text-xs font-mono shrink-0 text-black">({q.points} pt)</span>
                 </div>
@@ -867,7 +876,7 @@ export function QuestionBankManager({
                   <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mt-2 pl-6 text-sm text-black">
                     {q.options.map((opt, oi) => (
                       <div key={oi}>
-                        {String.fromCharCode(65 + oi)}. {opt}
+                        {String.fromCharCode(65 + oi)}. <FuriganaText text={opt} />
                       </div>
                     ))}
                   </div>
@@ -896,13 +905,17 @@ export function QuestionBankManager({
                 <tr key={q.id} className="border-b border-black/30">
                   <td className="p-2 border-r border-black font-mono">Q{idx + 1}</td>
                   <td className="p-2 border-r border-black">
-                    {q.prompt}
+                    <FuriganaText text={q.prompt} />
                     {q.audioFileName ? ` [Audio: ${q.audioFileName}]` : ''}
                   </td>
                   <td className="p-2 border-r border-black">{categoryLabel(q.category, 'both')}</td>
-                  <td className="p-2 border-r border-black font-bold text-sm">{q.correctAnswer}</td>
+                  <td className="p-2 border-r border-black font-bold text-sm">
+                    <FuriganaText text={q.correctAnswer} />
+                  </td>
                   <td className="p-2 border-r border-black font-mono">{q.points}</td>
-                  <td className="p-2">{q.explanation || '—'}</td>
+                  <td className="p-2">
+                    {q.explanation ? <FuriganaText text={q.explanation} /> : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -990,6 +1003,16 @@ export function QuestionBankManager({
               : 'Kelola soal per kelompok/bab, edit & atur kelas/level/topik, upload audio Choukai, dan cetak lembar soal bersama Sensei & Admin.'}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowVocabGenerator(true)}
+          className="apple-btn-primary inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium shrink-0"
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>
+            {lang === 'ja' ? 'JLPT語彙 & 問題生成' : 'Kamus JLPT & Generator Soal'}
+          </span>
+        </button>
       </div>
 
       {/* Print Preview Modal */}
@@ -1087,7 +1110,9 @@ export function QuestionBankManager({
                         <div className="flex items-start justify-between gap-3 text-sm font-medium text-black">
                           <div>
                             <span className="font-mono mr-2">Q{idx + 1}.</span>
-                            <span className="whitespace-pre-line">{q.prompt}</span>
+                            <span className="whitespace-pre-line">
+                              <FuriganaText text={q.prompt} />
+                            </span>
                           </div>
                           <span className="text-xs font-mono tabular-nums text-neutral-600 shrink-0">
                             ({q.points} pt)
@@ -1102,7 +1127,7 @@ export function QuestionBankManager({
                           <div className="grid grid-cols-2 gap-2 mt-2 pl-6 text-sm text-neutral-800">
                             {q.options.map((opt, oi) => (
                               <div key={oi}>
-                                {String.fromCharCode(65 + oi)}. {opt}
+                                {String.fromCharCode(65 + oi)}. <FuriganaText text={opt} />
                               </div>
                             ))}
                           </div>
@@ -1127,12 +1152,16 @@ export function QuestionBankManager({
                       {previewData.questions.map((q, idx) => (
                         <tr key={q.id} className="border-b border-neutral-200">
                           <td className="p-2 border-r border-neutral-300 font-mono">Q{idx + 1}</td>
-                          <td className="p-2 border-r border-neutral-300">{q.prompt}</td>
+                          <td className="p-2 border-r border-neutral-300">
+                            <FuriganaText text={q.prompt} />
+                          </td>
                           <td className="p-2 border-r border-neutral-300 font-bold text-black">
-                            {q.correctAnswer}
+                            <FuriganaText text={q.correctAnswer} />
                           </td>
                           <td className="p-2 border-r border-neutral-300 font-mono tabular-nums">{q.points}</td>
-                          <td className="p-2 text-neutral-700">{q.explanation || '—'}</td>
+                          <td className="p-2 text-neutral-700">
+                            {q.explanation ? <FuriganaText text={q.explanation} /> : '—'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1792,11 +1821,15 @@ export function QuestionBankManager({
                     <span className="font-mono font-semibold mr-1.5 text-[#1d1d1f] dark:text-[#f5f5f7]">
                       Q{idx + 1}.
                     </span>
-                    <span className="text-[#1d1d1f] dark:text-[#f5f5f7]">{q.prompt}</span>
+                    <span className="text-[#1d1d1f] dark:text-[#f5f5f7]">
+                      <FuriganaText text={q.prompt} />
+                    </span>
                     {q.audioDataUrl && (
                       <span className="text-[#0071e3] dark:text-[#2997ff] font-medium ml-1.5">[Audio]</span>
                     )}
-                    <span className="text-[#6e6e73] dark:text-[#86868b] ml-2">({q.correctAnswer})</span>
+                    <span className="text-[#6e6e73] dark:text-[#86868b] ml-2">
+                      (<FuriganaText text={q.correctAnswer} />)
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -2350,13 +2383,13 @@ export function QuestionBankManager({
                                         {rBadge.label}
                                       </span>
                                       <span className="text-[14px] font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
-                                        {q.prompt}
+                                        <FuriganaText text={q.prompt} />
                                       </span>
                                     </div>
                                     <div className="text-[12px] text-[#6e6e73] dark:text-[#86868b] flex flex-wrap items-center gap-1.5">
                                       <span className="font-semibold text-[#0071e3] dark:text-[#2997ff]">
                                         {lang === 'ja' ? '正解: ' : 'Kunci: '}
-                                        {q.correctAnswer}
+                                        <FuriganaText text={q.correctAnswer} />
                                       </span>
                                       <span>·</span>
                                       <span>{categoryLabel(q.category, lang)}</span>
@@ -2497,6 +2530,15 @@ export function QuestionBankManager({
         }
         onCancel={() => setConfirmDelete(null)}
         onConfirm={executeConfirmedDelete}
+      />
+
+      <VocabGeneratorModal
+        open={showVocabGenerator}
+        onClose={() => setShowVocabGenerator(false)}
+        lang={lang}
+        profile={profile}
+        vocabOverrides={vocabOverrides}
+        onSavedToast={showToast}
       />
     </div>
   );

@@ -8,6 +8,10 @@
 5. All string fields enforce explicit `.size()` boundaries matching `firebase-blueprint.json`.
 6. All `createdAt` and `updatedAt` timestamps must equal `request.time` (immutable `createdAt` and owner/author UIDs on updates).
 7. Every `update` block begins with `isValid[Entity](incoming())` and uses action-based `affectedKeys().hasOnly(...)` allowlists plus an `isHead()` escape hatch.
+8. Teachers (`role == 'teacher'`) can only read/create/update `reportCards` for their assigned classes in `draft` or `waiting_approval` status; finalizing, unlocking, issuing/revoking certificates, and updating `schoolSettings` or `counters` require `isHead()`.
+9. Public certificate QR verification reads only `/certificateVerifications/{certNumber}` via single-document `get` (`allow list: if false;`), containing strictly non-score public status fields (`certificateNumber`, `studentName`, `programLabel`, `completionDate`, `issueDate`, `schoolNameJa`, `status`).
+10. Unassigned students (`classId == ""`) and their notes are readable and assignable ONLY by Head Admin (`isHead()`). Teachers (`role == 'teacher'`) can query/read ONLY assigned students in their `assignedClasses` (`classId != "" && teacherHasClass(existing().classId)`), and cannot reassign classes or edit program duration.
+11. JLPT core vocabulary (`N5-N1`) is stored strictly as read-only static JSON assets and never injected raw into `/questions`. Contextual Indonesian translation overrides live in `/vocabOverrides/{vocabId}` where only active staff (`isActiveStaff()`) can read/edit while preserving immutable `vocabId` and verified `updatedBy == request.auth.uid`. Question Generator outputs require staging preview and save as `draft` or `pending` (`questions` collection never auto-publishes).
 
 ## 2. The "Dirty Dozen" Adversarial Payloads
 1. **Self-Promote to Head**: Unprivileged user creates `/users/{uid}` with `role: 'head'`, `status: 'active'`. -> `PERMISSION_DENIED`.

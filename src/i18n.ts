@@ -59,9 +59,12 @@ export function tr(pair: BiText, lang: LanguageMode): string {
   return `${pair.ja} / ${pair.id}`;
 }
 
-export function classLabel(classId: ClassId | 'all', lang: LanguageMode): string {
+export function classLabel(classId: ClassId | 'all' | '', lang: LanguageMode): string {
   if (classId === 'all') {
     return tr(UI_TEXT.allClasses, lang);
+  }
+  if (classId === '') {
+    return tr({ ja: '未配属', id: 'Belum Ditempatkan' }, lang);
   }
   const found = CLASSES.find((c) => c.id === classId);
   if (!found) return classId;

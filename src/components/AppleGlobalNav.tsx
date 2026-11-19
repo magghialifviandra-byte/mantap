@@ -20,12 +20,14 @@ export type AppleNavTab =
   | 'dashboard'
   | 'monitoring'
   | 'report'
+  | 'reportCards'
   | 'bank'
   | 'grading'
   | 'roster'
   | 'schedule'
   | 'journal'
-  | 'users';
+  | 'users'
+  | 'settings';
 
 export interface MegaMenuLink {
   id: string;
@@ -277,6 +279,11 @@ export function AppleGlobalNav({
               onSelect: () => navigateAndClose('report', { reportSubTab: 'weekly' }),
             },
             {
+              id: 'rep-cards',
+              label: lang === 'id' ? 'Rapor & Sertifikat Kelulusan' : '成績通知表・修了証書',
+              onSelect: () => navigateAndClose('reportCards'),
+            },
+            {
               id: 'rep-recap',
               label: lang === 'id' ? 'Rekap & Ekspor PDF/Excel' : '総括レポート・出力',
               onSelect: () => navigateAndClose('dashboard', { sectionAnchor: 'recap' }),
@@ -293,6 +300,11 @@ export function AppleGlobalNav({
               id: 'ql-rep-alerts',
               label: lang === 'id' ? 'Peringatan Siswa Berisiko' : '要注意学生アラート',
               onSelect: () => navigateAndClose('dashboard', { sectionAnchor: 'alerts' }),
+            },
+            {
+              id: 'ql-rep-settings',
+              label: lang === 'id' ? 'Pengaturan Rapor & Sertifikat' : '通知表・修了証書設定',
+              onSelect: () => navigateAndClose('settings'),
             },
           ],
         },
@@ -352,9 +364,19 @@ export function AppleGlobalNav({
               label: lang === 'id' ? 'Catatan Kepala Sekolah (Privat)' : '校長ノート（非公開）',
               onSelect: () => navigateAndClose('journal'),
             },
+            {
+              id: 'adm-settings',
+              label: lang === 'id' ? 'Pengaturan Rapor & Sertifikat' : '成績通知表・修了証書設定',
+              onSelect: () => navigateAndClose('settings'),
+            },
           ],
           quickLinksHeading: lang === 'id' ? 'Tautan Cepat' : 'クイックリンク',
           quickLinks: [
+            {
+              id: 'ql-adm-rc',
+              label: lang === 'id' ? 'Rapor & Sertifikat Siswa' : '成績通知表・修了証書管理',
+              onSelect: () => navigateAndClose('reportCards'),
+            },
             {
               id: 'ql-adm-ann',
               label: lang === 'id' ? 'Pengumuman Sekolah' : '全体お知らせ配信',
@@ -387,6 +409,11 @@ export function AppleGlobalNav({
             label: lang === 'id' ? 'Laporan Mingguan & Sikap' : '週報・学習態度を入力',
             badgeCount: totalUnreadFeedback,
             onSelect: () => navigateAndClose('report', { reportSubTab: 'weekly' }),
+          },
+          {
+            id: 't-rep-cards',
+            label: lang === 'id' ? 'Rapor Siswa (Komentar & Ajukan)' : '成績通知表（所見入力・提出）',
+            onSelect: () => navigateAndClose('reportCards'),
           },
         ],
         quickLinksHeading: lang === 'id' ? 'Tautan Cepat' : 'クイックリンク',
@@ -556,12 +583,17 @@ export function AppleGlobalNav({
 
   const isSectionActive = (id: MegaMenuSection['id']): boolean => {
     if (id === 'dashboard') return activeTab === 'dashboard';
-    if (id === 'reports') return activeTab === 'report';
+    if (id === 'reports') return activeTab === 'report' || activeTab === 'reportCards';
     if (id === 'bank') return activeTab === 'bank' || activeTab === 'grading';
     if (id === 'schedule') return activeTab === 'schedule';
     if (id === 'classes') return activeTab === 'roster';
     if (id === 'admin')
-      return activeTab === 'monitoring' || activeTab === 'users' || activeTab === 'journal';
+      return (
+        activeTab === 'monitoring' ||
+        activeTab === 'users' ||
+        activeTab === 'journal' ||
+        activeTab === 'settings'
+      );
     return false;
   };
 
@@ -1179,6 +1211,15 @@ export function AppleFooter({
                   {lang === 'id' ? 'Daftar Siswa' : '学生名簿'}
                 </button>
               </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('reportCards')}
+                  className="hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7] hover:underline text-left"
+                >
+                  {lang === 'id' ? 'Rapor & Sertifikat' : '成績通知表・修了証書'}
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -1213,6 +1254,15 @@ export function AppleFooter({
                     className="hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7] hover:underline text-left"
                   >
                     {lang === 'id' ? 'Pengguna & Peran' : 'ユーザー・権限'}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('settings')}
+                    className="hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7] hover:underline text-left"
+                  >
+                    {lang === 'id' ? 'Pengaturan Sekolah' : '通知表・証書設定'}
                   </button>
                 </li>
               </ul>

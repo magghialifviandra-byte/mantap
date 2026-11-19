@@ -26,6 +26,7 @@ import {
   Announcement,
   AnnouncementRead,
   ApprovalStatus,
+  CertificateRecord,
   ClassId,
   CLASSES,
   DailyReport,
@@ -33,7 +34,9 @@ import {
   LanguageMode,
   QualityThresholds,
   QuestionItem,
+  ReportCard,
   ScheduleDoc,
+  SchoolSettings,
   Student,
   TestResult,
   TestType,
@@ -51,6 +54,7 @@ import {
 import { CLASS_THEMES, getClassTheme } from '../utils/classTheme';
 import { getTodayDateStr, getWeekKey } from '../utils/dateUtils';
 import { clampNum, clampStr } from '../utils/payloadGuards';
+import { checkCertificateEligibility, getStudentProgramProgress } from '../utils/programUtils';
 import {
   approvalLabel,
   compileDailyExportData,
@@ -82,6 +86,9 @@ interface Props {
   thresholds: QualityThresholds;
   handledAlerts: HandledAlert[];
   scheduleDoc: ScheduleDoc | null;
+  reportCards: ReportCard[];
+  certificates: CertificateRecord[];
+  schoolSettings: SchoolSettings;
   onNavigateTab: (
     tab:
       | 'monitoring'
@@ -92,6 +99,8 @@ interface Props {
       | 'schedule'
       | 'journal'
       | 'users'
+      | 'reportCards'
+      | 'settings'
   ) => void;
   onOpenPendingQuestions: () => void;
   onSelectStudent: (stu: Student) => void;
@@ -129,6 +138,9 @@ export function HeadDashboard({
   thresholds,
   handledAlerts,
   scheduleDoc,
+  reportCards,
+  certificates,
+  schoolSettings,
   onNavigateTab,
   onOpenPendingQuestions,
   onSelectStudent,
@@ -205,6 +217,48 @@ export function HeadDashboard({
     () => allAlerts.filter((a) => !a.handledRecord).length,
     [allAlerts]
   );
+
+  // Report Card & Certificate Dashboard Widgets
+  const waitingApprovalCardsCount = useMemo(
+    () => reportCards.filter((rc) => rc.status === 'waiting_approval').length,
+    [reportCards]
+  );
+
+  const unassignedCount = useMemo(
+    () => students.filter((s) => !s.classId).length,
+    [students]
+  );
+
+  const finishingSoonStudents = useMemo(
+    () =>
+      students
+        .filter((s) => s.active && Boolean(s.classId))
+        .map((s) => ({ student: s, prog: getStudentProgramProgress(s, today) }))
+        .filter((x) => x.prog.finishingSoon30Days)
+        .sort((a, b) => a.prog.daysRemaining - b.prog.daysRemaining),
+    [students, today]
+  );
+
+  const readyCertificatesCount = useMemo(() => {
+    const validCertStudentIds = new Set(
+      certificates.filter((c) => c.status === 'valid').map((c) => c.studentId)
+    );
+    return students.filter((stu) => {
+      if (!stu.active || !stu.classId) return false;
+      if (validCertStudentIds.has(stu.id)) return false;
+      const elig = checkCertificateEligibility({
+        student: stu,
+        allStudents: students,
+        testResults,
+        dailyReports: reports,
+        weeklyReports,
+        schoolSettings,
+        qualityThresholds: thresholds,
+        todayStr: today,
+      });
+      return elig.configured && elig.eligible;
+    }).length;
+  }, [students, certificates, testResults, reports, weeklyReports, schoolSettings, thresholds, today]);
 
   // 1. 4-Class Widget Cards (Today's Schedule + Daily Report Status + Latest Test Average)
   const todayWeekdayKeywords = WEEKDAY_KEYWORDS[new Date().getDay()] || [];
@@ -385,6 +439,7 @@ export function HeadDashboard({
   };
 
   const handleMarkAlertHandled = async (alert: ComputedStudentAlert) => {
+    if (!alert.student.classId) return;
     setSavingQuality(true);
     const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
     const handlerName = clampStr(profile.nickname || profile.displayName, 100) || 'Admin';
@@ -1056,6 +1111,21 @@ export function HeadDashboard({
                 </span>
               </button>
             )}
+            {unassignedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('roster')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[#0071e3]/10 dark:bg-[#2997ff]/15 text-[#0066cc] dark:text-[#2997ff] hover:opacity-85 transition-opacity whitespace-nowrap tabular-nums"
+              >
+                <span>
+                  {lang === 'ja'
+                    ? `未配属学生 (${unassignedCount}名)`
+                    : lang === 'id'
+                    ? `Belum Ditempatkan (${unassignedCount})`
+                    : `Unassigned / 未配属 (${unassignedCount})`}
+                </span>
+              </button>
+            )}
           </div>
           <p className="text-[17px] leading-[1.47] text-[#6e6e73] dark:text-[#86868b]">
             {lang === 'ja'
@@ -1178,7 +1248,7 @@ export function HeadDashboard({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {visibleAlerts.map((al) => {
-                const sTheme = CLASS_THEMES[al.student.classId];
+                const sTheme = getClassTheme(al.student.classId);
                 const isHandling = handlingAlertId === al.id;
                 return (
                   <div
@@ -1200,7 +1270,7 @@ export function HeadDashboard({
                             {al.student.name}
                           </button>
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white dark:bg-[#2c2c2e] text-[#6e6e73] dark:text-[#86868b]">
-                            <span className={`w-1.5 h-1.5 rounded-full ${sTheme.dotColor}`} />
+                            {sTheme && <span className={`w-1.5 h-1.5 rounded-full ${sTheme.dotColor}`} />}
                             <span>{classLabel(al.student.classId, lang)}</span>
                           </span>
                         </div>
@@ -1448,6 +1518,109 @@ export function HeadDashboard({
           </AppleModalSheet>
         )}
       </AnimatePresence>
+
+      {/* Report Cards & Certificates Quick Widgets */}
+      <AppleScrollReveal delay={0.05}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Widget 1: Report Cards Waiting Approval */}
+          <div className="apple-tile border border-[#d2d2d7]/60 dark:border-[#424245]/60 rounded-[24px] p-5 flex flex-col justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[12px] text-[#6e6e73] dark:text-[#86868b]">
+                  {lang === 'id'
+                    ? 'Rapor Menunggu Persetujuan'
+                    : '承認待ちの成績通知表'}
+                </div>
+                <div className="text-[30px] font-semibold tracking-tight tabular-nums text-[#1d1d1f] dark:text-[#f5f5f7] mt-1">
+                  <AnimatedCounter value={waitingApprovalCardsCount} />
+                  <span className="text-[14px] font-normal text-[#6e6e73] dark:text-[#86868b] ml-1">
+                    {lang === 'id' ? 'rapor' : '件'}
+                  </span>
+                </div>
+              </div>
+              <span className="w-9 h-9 rounded-full bg-[#f5f5f7] dark:bg-[#2c2c2e] flex items-center justify-center text-[#0071e3] dark:text-[#2997ff] shrink-0">
+                <FileText className="w-4 h-4" />
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('reportCards')}
+              className="text-left text-[12px] font-medium text-[#0066cc] dark:text-[#2997ff] hover:underline"
+            >
+              {lang === 'id' ? 'Buka & Setujui Rapor →' : '通知表を確認・承認 →'}
+            </button>
+          </div>
+
+          {/* Widget 2: Students Finishing in Next 30 Days */}
+          <div className="apple-tile border border-[#d2d2d7]/60 dark:border-[#424245]/60 rounded-[24px] p-5 flex flex-col justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[12px] text-[#6e6e73] dark:text-[#86868b]">
+                  {lang === 'id'
+                    ? 'Siswa Lulus 30 Hari ke Depan'
+                    : '30日以内に修了予定の学生'}
+                </div>
+                <div className="text-[30px] font-semibold tracking-tight tabular-nums text-[#1d1d1f] dark:text-[#f5f5f7] mt-1">
+                  <AnimatedCounter value={finishingSoonStudents.length} />
+                  <span className="text-[14px] font-normal text-[#6e6e73] dark:text-[#86868b] ml-1">
+                    {lang === 'id' ? 'siswa' : '名'}
+                  </span>
+                </div>
+              </div>
+              <span className="w-9 h-9 rounded-full bg-[#f5f5f7] dark:bg-[#2c2c2e] flex items-center justify-center text-[#1d1d1f] dark:text-[#f5f5f7] shrink-0">
+                <Clock className="w-4 h-4" />
+              </span>
+            </div>
+            {finishingSoonStudents.length === 0 ? (
+              <div className="text-[12px] text-[#6e6e73] dark:text-[#86868b]">
+                {lang === 'id' ? 'Tidak ada siswa dalam 30 hari.' : '該当学生はいません。'}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {finishingSoonStudents.slice(0, 4).map(({ student, prog }) => (
+                  <button
+                    key={student.id}
+                    type="button"
+                    onClick={() => onSelectStudent(student)}
+                    className="px-2.5 py-0.5 rounded-full text-[11px] bg-[#f5f5f7] dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-[#f5f5f7] hover:text-[#0066cc] dark:hover:text-[#2997ff] tabular-nums"
+                  >
+                    {student.name} ({prog.daysRemaining}d)
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Widget 3: Certificates Ready to Issue */}
+          <div className="apple-tile border border-[#d2d2d7]/60 dark:border-[#424245]/60 rounded-[24px] p-5 flex flex-col justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[12px] text-[#6e6e73] dark:text-[#86868b]">
+                  {lang === 'id'
+                    ? 'Sertifikat Siap Diterbitkan'
+                    : '発行可能な修了証書'}
+                </div>
+                <div className="text-[30px] font-semibold tracking-tight tabular-nums text-[#1d1d1f] dark:text-[#f5f5f7] mt-1">
+                  <AnimatedCounter value={readyCertificatesCount} />
+                  <span className="text-[14px] font-normal text-[#6e6e73] dark:text-[#86868b] ml-1">
+                    {lang === 'id' ? 'siswa' : '名'}
+                  </span>
+                </div>
+              </div>
+              <span className="w-9 h-9 rounded-full bg-[#f5f5f7] dark:bg-[#2c2c2e] flex items-center justify-center text-[#0071e3] dark:text-[#2997ff] shrink-0">
+                <Award className="w-4 h-4" />
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('reportCards')}
+              className="text-left text-[12px] font-medium text-[#0066cc] dark:text-[#2997ff] hover:underline"
+            >
+              {lang === 'id' ? 'Terbitkan Sertifikat →' : '修了証書の発行画面へ →'}
+            </button>
+          </div>
+        </div>
+      </AppleScrollReveal>
 
       {/* 4-Class Apple Bento Widget Tiles (Solid surface, muted dot, large metric + concise caption) */}
       <AppleScrollReveal delay={0.06}>
@@ -1994,7 +2167,7 @@ export function HeadDashboard({
                 </thead>
                 <tbody>
                   {displayedRankingRows.map((row) => {
-                    const sTheme = CLASS_THEMES[row.student.classId];
+                    const sTheme = getClassTheme(row.student.classId);
                     const isTop3 = row.rank <= 3;
                     return (
                       <tr key={row.student.id} className="apple-table-row">
@@ -2019,7 +2192,7 @@ export function HeadDashboard({
                         </td>
                         <td className="py-2.5 px-4 text-[13px] text-[#6e6e73] dark:text-[#86868b] whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full ${sTheme.dotColor}`} />
+                            {sTheme && <span className={`w-2 h-2 rounded-full ${sTheme.dotColor}`} />}
                             <span>{classLabel(row.student.classId, lang)}</span>
                           </span>
                         </td>

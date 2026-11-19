@@ -1,12 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import {
   AlertTriangle,
   Award,
   BookOpen,
+  Calendar,
   CalendarCheck,
+  Download,
   Edit3,
+  Eye,
+  FileText,
   MessageSquarePlus,
+  Printer,
   Save,
   Star,
   Trash2,
@@ -17,11 +22,15 @@ import { AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { classLabel } from '../i18n';
 import {
+  CertificateRecord,
   DailyReport,
   HandledAlert,
   LanguageMode,
+  ProgramDurationMonths,
   QualityThresholds,
+  ReportCard,
   ScheduleRow,
+  SchoolSettings,
   Student,
   StudentProfileNote,
   TestResult,
@@ -38,9 +47,14 @@ import {
   isStudentAccessibleToUser,
   parseTimestampMs,
 } from '../utils/analyticsUtils';
-import { CLASS_THEMES } from '../utils/classTheme';
+import { getClassTheme } from '../utils/classTheme';
+import { getTodayDateStr } from '../utils/dateUtils';
 import { clampStr } from '../utils/payloadGuards';
+import { downloadElementAsPdf } from '../utils/pdfExport';
+import { calculateProgramEndDate, getStudentProgramProgress } from '../utils/programUtils';
 import { AppleModalSheet } from './AppleGestures';
+import { CertificateDocument } from './CertificateDocument';
+import { ReportCardDocument } from './ReportCardDocument';
 
 interface Props {
   student: Student | null;
@@ -53,6 +67,10 @@ interface Props {
   scheduleRows: ScheduleRow[];
   thresholds: QualityThresholds;
   handledAlerts: HandledAlert[];
+  reportCards: ReportCard[];
+  certificates: CertificateRecord[];
+  schoolSettings: SchoolSettings;
+  onRegisterPrintView?: (node: React.ReactNode | null) => void;
   onClose: () => void;
 }
 
@@ -67,17 +85,52 @@ export function StudentProfileModal({
   scheduleRows,
   thresholds,
   handledAlerts,
+  reportCards,
+  certificates,
+  schoolSettings,
+  onRegisterPrintView,
   onClose,
 }: Props) {
+  const today = getTodayDateStr();
   const [newNote, setNewNote] = useState('');
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalDraft, setGoalDraft] = useState('');
+  const [editingProgram, setEditingProgram] = useState(false);
+  const [progMonthsDraft, setProgMonthsDraft] = useState<ProgramDurationMonths>(6);
+  const [progStartDraft, setProgStartDraft] = useState(today);
+  const [progEndDraft, setProgEndDraft] = useState(() => calculateProgramEndDate(today, 6));
+  const [progError, setProgError] = useState('');
+  const [previewDoc, setPreviewDoc] = useState<
+    | { kind: 'reportCard'; card: ReportCard }
+    | { kind: 'certificate'; cert: CertificateRecord }
+    | null
+  >(null);
+  const previewSheetRef = useRef<HTMLDivElement | null>(null);
   const [busy, setBusy] = useState(false);
 
   const canAccess = useMemo(() => {
     if (!student) return false;
     return isStudentAccessibleToUser(student, profile, scheduleRows);
   }, [student, profile, scheduleRows]);
+
+  const programProgress = useMemo(
+    () => (student ? getStudentProgramProgress(student, today) : null),
+    [student, today]
+  );
+
+  const studentReportCards = useMemo(() => {
+    if (!student) return [];
+    return reportCards
+      .filter((rc) => rc.studentId === student.id)
+      .sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || '') || b.version - a.version);
+  }, [student, reportCards]);
+
+  const studentCertificates = useMemo(() => {
+    if (!student) return [];
+    return certificates
+      .filter((c) => c.studentId === student.id)
+      .sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || '') || b.version - a.version);
+  }, [student, certificates]);
 
   const weeklyHistory = useMemo(
     () => (student ? getOfficialWeeklyScoreByWeek(student.id, testResults) : []),
@@ -109,7 +162,9 @@ export function StudentProfileModal({
   );
 
   const attendanceSummary = useMemo(() => {
-    if (!student) return { absentCount: 0, lateCount: 0, classReportDays: 0, attendanceRate: null };
+    if (!student || !student.classId) {
+      return { absentCount: 0, lateCount: 0, classReportDays: 0, attendanceRate: null };
+    }
     const clsReports = reports.filter((r) => r.classId === student.classId);
     return getStudentAttendanceSummary(student.name, clsReports);
   }, [student, reports]);
@@ -256,7 +311,94 @@ export function StudentProfileModal({
     }
   };
 
-  const sTheme = student ? CLASS_THEMES[student.classId] : null;
+  const handleSaveProgramDuration = async () => {
+    if (!student || profile.role !== 'head') return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(progStartDraft) || !/^\d{4}-\d{2}-\d{2}$/.test(progEndDraft)) {
+      setProgError(
+        lang === 'id'
+          ? 'Masukkan tanggal mulai dan tanggal selesai yang valid.'
+          : '有効な開始日と終了日を入力してください。'
+      );
+      return;
+    }
+    if (progEndDraft < progStartDraft) {
+      setProgError(
+        lang === 'id'
+          ? 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.'
+          : '終了日は開始日以降の日付を指定してください。'
+      );
+      return;
+    }
+    setProgError('');
+    setBusy(true);
+    const prevSummary =
+      student.programMonths && student.programStartDate
+        ? `${student.programMonths}m (${student.programStartDate} 〜 ${student.programEndDate || '-'})`
+        : 'Not set';
+    try {
+      await updateDoc(doc(db, 'students', student.id), {
+        programMonths: progMonthsDraft,
+        programStartDate: progStartDraft,
+        programEndDate: progEndDraft,
+        updatedAt: serverTimestamp(),
+      });
+      await logActivity({
+        actor: profile,
+        actionType: 'data_update',
+        targetType: 'student',
+        targetLabel: student.name,
+        detail: `Program: ${prevSummary} → ${progMonthsDraft}m (${progStartDraft} 〜 ${progEndDraft})`,
+      });
+      setEditingProgram(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `students/${student.id}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePrintPreview = () => {
+    if (!previewDoc || !onRegisterPrintView) return;
+    if (previewDoc.kind === 'reportCard') {
+      onRegisterPrintView(
+        <ReportCardDocument card={previewDoc.card} settings={schoolSettings} />
+      );
+    } else {
+      onRegisterPrintView(
+        <>
+          <style>{`@media print { @page { size: A4 landscape; margin: 6mm; } }`}</style>
+          <CertificateDocument certificate={previewDoc.cert} settings={schoolSettings} />
+        </>
+      );
+    }
+    window.setTimeout(() => window.print(), 120);
+  };
+
+  const handleDownloadPreviewPdf = async () => {
+    if (!previewDoc || !previewSheetRef.current || !student) return;
+    setBusy(true);
+    try {
+      const sheetEl = previewSheetRef.current.firstElementChild as HTMLElement | null;
+      if (!sheetEl) return;
+      if (previewDoc.kind === 'reportCard') {
+        await downloadElementAsPdf(
+          sheetEl,
+          `${student.name}_${previewDoc.card.periodLabel}`,
+          'portrait'
+        );
+      } else {
+        await downloadElementAsPdf(
+          sheetEl,
+          `${previewDoc.cert.certificateNumber}_${student.name}`,
+          'landscape'
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sTheme = student ? getClassTheme(student.classId) : null;
   const latestAttitude = attitudeHistory[attitudeHistory.length - 1] || null;
 
   return (
@@ -276,12 +418,10 @@ export function StudentProfileModal({
                       {student.studentCode}
                     </span>
                   )}
-                  {sTheme && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[12px] font-medium bg-[#f5f5f7] dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-[#f5f5f7]">
-                      <span className={`w-2 h-2 rounded-full ${sTheme.dotColor}`} />
-                      <span>{classLabel(student.classId, lang)}</span>
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[12px] font-medium bg-[#f5f5f7] dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    {sTheme && <span className={`w-2 h-2 rounded-full ${sTheme.dotColor}`} />}
+                    <span>{classLabel(student.classId, lang)}</span>
+                  </span>
                 </div>
 
                 {/* Exam Target Goal */}
@@ -355,6 +495,162 @@ export function StudentProfileModal({
               </div>
             ) : (
               <div className="p-6 space-y-6">
+              {/* Program Duration & Progress Indicator */}
+              {programProgress && (
+                <div className="bg-[#f5f5f7] dark:bg-[#161617] rounded-[18px] p-4 space-y-2.5 border border-[#d2d2d7]/50 dark:border-[#424245]/60">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-[13px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                      <Calendar className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]" />
+                      <span>
+                        {lang === 'id' ? 'Durasi Program Studi' : '受講プログラム期間'}
+                      </span>
+                    </div>
+                    {profile.role === 'head' && !editingProgram && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextMonths = (student.programMonths as ProgramDurationMonths) || 6;
+                          const nextStart = student.programStartDate || today;
+                          const nextEnd =
+                            student.programEndDate || calculateProgramEndDate(nextStart, nextMonths);
+                          setProgMonthsDraft(nextMonths);
+                          setProgStartDraft(nextStart);
+                          setProgEndDraft(nextEnd);
+                          setProgError('');
+                          setEditingProgram(true);
+                        }}
+                        className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0066cc] dark:text-[#2997ff] hover:underline"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>{lang === 'id' ? 'Ubah Masa Belajar' : '受講期間を編集'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {editingProgram && profile.role === 'head' ? (
+                    <div className="space-y-2.5 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <label className="space-y-1">
+                          <span className="block text-[11px] font-medium text-[#6e6e73] dark:text-[#86868b]">
+                            {lang === 'id' ? 'Durasi Program' : 'コース期間'}
+                          </span>
+                          <select
+                            value={progMonthsDraft}
+                            onChange={(e) => {
+                              const nextM = Number(e.target.value) as ProgramDurationMonths;
+                              setProgMonthsDraft(nextM);
+                              const autoEnd = calculateProgramEndDate(progStartDraft, nextM);
+                              if (autoEnd) setProgEndDraft(autoEnd);
+                              setProgError('');
+                            }}
+                            className="w-full glass-input px-3 py-1.5 text-[13px] rounded-[10px]"
+                          >
+                            <option value={2}>{lang === 'id' ? '2 Bulan' : '2か月コース'}</option>
+                            <option value={4}>{lang === 'id' ? '4 Bulan' : '4か月コース'}</option>
+                            <option value={6}>{lang === 'id' ? '6 Bulan' : '6か月コース'}</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1">
+                          <span className="block text-[11px] font-medium text-[#6e6e73] dark:text-[#86868b]">
+                            {lang === 'id' ? 'Tanggal Mulai' : '開始日'}
+                          </span>
+                          <input
+                            type="date"
+                            value={progStartDraft}
+                            onChange={(e) => {
+                              const nextS = e.target.value;
+                              setProgStartDraft(nextS);
+                              const autoEnd = calculateProgramEndDate(nextS, progMonthsDraft);
+                              if (autoEnd) setProgEndDraft(autoEnd);
+                              setProgError('');
+                            }}
+                            className="w-full glass-input px-3 py-1.5 text-[13px] font-mono tabular-nums rounded-[10px]"
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="block text-[11px] font-medium text-[#6e6e73] dark:text-[#86868b]">
+                            {lang === 'id' ? 'Tanggal Selesai (Masa Belajar)' : '終了日（修了予定日）'}
+                          </span>
+                          <input
+                            type="date"
+                            value={progEndDraft}
+                            min={progStartDraft || undefined}
+                            onChange={(e) => {
+                              setProgEndDraft(e.target.value);
+                              setProgError('');
+                            }}
+                            className="w-full glass-input px-3 py-1.5 text-[13px] font-mono tabular-nums rounded-[10px]"
+                          />
+                        </label>
+                      </div>
+                      {progError && (
+                        <div className="text-[12px] text-[#dc2626] dark:text-[#ff453a]">
+                          {progError}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={handleSaveProgramDuration}
+                          className="apple-btn-primary px-3.5 py-1.5 text-[12px] inline-flex items-center gap-1"
+                        >
+                          <Save className="w-3 h-3" />
+                          <span>{lang === 'id' ? 'Simpan' : '保存'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingProgram(false);
+                            setProgError('');
+                          }}
+                          className="px-3 py-1.5 text-[12px] rounded-full border border-[#d2d2d7] dark:border-[#424245] text-[#6e6e73] dark:text-[#86868b]"
+                        >
+                          {lang === 'id' ? 'Batal' : 'キャンセル'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : programProgress.isConfigured && programProgress.valid ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
+                        <div className="font-medium text-[#1d1d1f] dark:text-[#f5f5f7] tabular-nums">
+                          {programProgress.programMonths}{lang === 'id' ? ' Bulan' : 'か月プログラム'}{' '}
+                          <span className="text-[#6e6e73] dark:text-[#86868b] font-mono text-[12px] ml-1.5">
+                            ({lang === 'id' ? 'Masa belajar:' : '受講期間:'} {programProgress.startDate} 〜{' '}
+                            {programProgress.endDate})
+                          </span>
+                        </div>
+                        <div className="text-[12px] font-semibold tabular-nums text-[#0071e3] dark:text-[#2997ff]">
+                          {programProgress.isCompleted
+                            ? lang === 'id'
+                              ? 'Program Selesai'
+                              : 'プログラム修了'
+                            : programProgress.isUpcoming
+                            ? lang === 'id'
+                              ? `Mulai ${programProgress.startDate}`
+                              : `開始予定 ${programProgress.startDate}`
+                            : lang === 'id'
+                            ? `Bulan ${programProgress.currentMonth} dari ${programProgress.totalMonths} · Sisa ${programProgress.daysRemaining} hari`
+                            : `${programProgress.totalMonths}か月中 ${programProgress.currentMonth}か月目 · 残り${programProgress.daysRemaining}日`}
+                        </div>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-[#d2d2d7]/60 dark:bg-[#2c2c2e] overflow-hidden">
+                        <div
+                          style={{ width: `${programProgress.progressPercent}%` }}
+                          className="h-full rounded-full bg-[#0071e3] dark:bg-[#2997ff] transition-all duration-300"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[12px] text-[#6e6e73] dark:text-[#86868b]">
+                      {lang === 'id'
+                        ? 'Durasi program (2/4/6 bulan), tanggal mulai & tanggal selesai belum diatur oleh Admin.'
+                        : '受講期間（2/4/6か月）および開始日・終了日がまだ設定されていません。'}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Active Alerts Strip */}
               {activeAlerts.length > 0 && (
                 <div className="space-y-2">
@@ -667,9 +963,192 @@ export function StudentProfileModal({
                   </div>
                 )}
               </div>
+              {/* Documents Section: Report Cards & Certificates */}
+              <div className="bg-[#f5f5f7] dark:bg-[#161617] rounded-[20px] p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-[14px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    <FileText className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]" />
+                    <span>
+                      {lang === 'id'
+                        ? 'Dokumen Resmi (Rapor & Sertifikat)'
+                        : '書類・成績通知表・修了証書'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-[#6e6e73] dark:text-[#86868b] tabular-nums">
+                    {studentReportCards.length + studentCertificates.length}{' '}
+                    {lang === 'id' ? 'dokumen' : '件'}
+                  </span>
+                </div>
+
+                {studentReportCards.length === 0 && studentCertificates.length === 0 ? (
+                  <div className="text-[13px] text-[#6e6e73] dark:text-[#86868b] py-2">
+                    {lang === 'id'
+                      ? 'Belum ada rapor atau sertifikat yang diterbitkan untuk siswa ini.'
+                      : 'この学生の成績通知表・修了証書はまだ作成されていません。'}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {studentCertificates.map((cert) => (
+                      <div
+                        key={cert.id}
+                        className="bg-white dark:bg-[#1d1d1f] border border-[#d2d2d7]/60 dark:border-[#424245]/60 rounded-[12px] px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[12px]"
+                      >
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                              {lang === 'id' ? 'Sertifikat Kelulusan' : '修了証書'} ({cert.programMonths}
+                              {lang === 'id' ? ' Bln' : 'か月'})
+                            </span>
+                            <span className="font-mono text-[11px] text-[#0066cc] dark:text-[#2997ff]">
+                              {cert.certificateNumber}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                cert.status === 'valid'
+                                  ? 'bg-[#16a34a]/10 text-[#15803d] dark:text-[#30d158]'
+                                  : cert.status === 'revoked'
+                                  ? 'bg-[#dc2626]/10 text-[#dc2626] dark:text-[#ff453a]'
+                                  : 'bg-[#6e6e73]/12 text-[#6e6e73] dark:text-[#86868b]'
+                              }`}
+                            >
+                              {cert.status === 'valid'
+                                ? lang === 'id'
+                                  ? 'Sah'
+                                  : '有効'
+                                : cert.status === 'revoked'
+                                ? lang === 'id'
+                                  ? 'Dicabut'
+                                  : '失効'
+                                : lang === 'id'
+                                ? 'Diganti'
+                                : '再発行済'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono text-[#6e6e73] dark:text-[#86868b]">
+                            {lang === 'id' ? 'Terbit:' : '発行日:'} {cert.issueDate} · v{cert.version}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDoc({ kind: 'certificate', cert })}
+                          className="apple-btn-secondary inline-flex items-center gap-1 px-3 py-1 text-[11px]"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>{lang === 'id' ? 'Lihat / PDF' : 'プレビュー・PDF'}</span>
+                        </button>
+                      </div>
+                    ))}
+
+                    {studentReportCards.map((rc) => (
+                      <div
+                        key={rc.id}
+                        className="bg-white dark:bg-[#1d1d1f] border border-[#d2d2d7]/60 dark:border-[#424245]/60 rounded-[12px] px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[12px]"
+                      >
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                              {rc.periodType === 'final'
+                                ? lang === 'id'
+                                  ? 'Rapor Akhir'
+                                  : '最終成績通知表'
+                                : lang === 'id'
+                                ? 'Rapor'
+                                : '成績通知表'}{' '}
+                              · {rc.periodLabel}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#f5f5f7] dark:bg-[#2c2c2e] text-[#6e6e73] dark:text-[#86868b]">
+                              {rc.status === 'finalized'
+                                ? lang === 'id'
+                                  ? 'Final'
+                                  : '確定済'
+                                : rc.status === 'waiting_approval'
+                                ? lang === 'id'
+                                  ? 'Menunggu ACC'
+                                  : '承認待ち'
+                                : rc.status === 'superseded'
+                                ? lang === 'id'
+                                  ? 'Riwayat Lama'
+                                  : '旧版'
+                                : lang === 'id'
+                                ? 'Draf'
+                                : '下書き'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono text-[#6e6e73] dark:text-[#86868b]">
+                            {rc.overallCombinedAvg !== null ? `${rc.overallCombinedAvg}% (${rc.overallGradeLabel})` : '—'} · {rc.issueDate} · v{rc.version}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDoc({ kind: 'reportCard', card: rc })}
+                          className="apple-btn-secondary inline-flex items-center gap-1 px-3 py-1 text-[11px]"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>{lang === 'id' ? 'Lihat / PDF' : 'プレビュー・PDF'}</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           </div>
+
+          {/* Inline Document Preview Overlay inside Student Profile Modal */}
+          {previewDoc && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white dark:bg-[#1d1d1f] border border-[#d2d2d7] dark:border-[#424245] rounded-[20px] max-w-6xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+                <div className="px-5 py-3.5 border-b border-[#d2d2d7]/60 dark:border-[#424245] flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[14px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    {previewDoc.kind === 'reportCard'
+                      ? `${previewDoc.card.studentName} — ${previewDoc.card.periodLabel}`
+                      : `${previewDoc.cert.certificateNumber} — ${previewDoc.cert.studentName}`}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={handleDownloadPreviewPdf}
+                      className="apple-btn-primary inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[12px]"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{lang === 'id' ? 'Unduh PDF' : 'PDF保存'}</span>
+                    </button>
+                    {onRegisterPrintView && (
+                      <button
+                        type="button"
+                        onClick={handlePrintPreview}
+                        className="apple-btn-secondary inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[12px]"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>{lang === 'id' ? 'Cetak' : '印刷'}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc(null)}
+                      className="p-1.5 rounded-full hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] text-[#6e6e73]"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 sm:p-6 overflow-auto bg-[#f5f5f7] dark:bg-black flex justify-center">
+                  <div ref={previewSheetRef} className="shadow-lg">
+                    {previewDoc.kind === 'reportCard' ? (
+                      <ReportCardDocument card={previewDoc.card} settings={schoolSettings} />
+                    ) : (
+                      <CertificateDocument
+                        certificate={previewDoc.cert}
+                        settings={schoolSettings}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </AppleModalSheet>
       )}
     </AnimatePresence>

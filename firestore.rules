@@ -41,12 +41,16 @@ service cloud.firestore {
       return c in ['hokkaido', 'saitama', 'nara', 'kaigo'];
     }
 
+    function isValidStudentClassId(c) {
+      return c == '' || isValidClassId(c);
+    }
+
     function isValidClassList(arr) {
       return arr is list && arr.size() <= 4 && arr.hasOnly(['hokkaido', 'saitama', 'nara', 'kaigo']);
     }
 
     function isHeadEmail() {
-      return isVerified() && request.auth.token.email == 'magghialifviandra@gmail.com';
+      return isVerified() && request.auth.token.email in ['alifmagghi5@gmail.com', 'magghialifviandra@gmail.com'];
     }
 
     function isHead() {
@@ -68,6 +72,14 @@ service cloud.firestore {
 
     function isOwner(userId) {
       return isVerified() && request.auth.uid == userId;
+    }
+
+    function teacherHasClass(classId) {
+      return isActiveStaff() && (
+        isHead() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         classId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedClasses)
+      );
     }
 
     function inviteDocIdForAuth() {
@@ -126,13 +138,20 @@ service cloud.firestore {
 
     function isValidStudent(data) {
       return data.keys().hasAll(['name', 'studentCode', 'classId', 'targetGoal', 'active', 'notes', 'createdBy', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['name', 'studentCode', 'classId', 'targetGoal', 'active', 'notes', 'createdBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'name', 'studentCode', 'classId', 'targetGoal', 'active', 'notes',
+          'programMonths', 'programStartDate', 'programEndDate',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
         data.studentCode is string && data.studentCode.size() <= 40 &&
-        isValidClassId(data.classId) &&
+        isValidStudentClassId(data.classId) &&
         data.targetGoal is string && data.targetGoal.size() <= 120 &&
         data.active is bool &&
         data.notes is string && data.notes.size() <= 500 &&
+        (!('programMonths' in data) || (data.programMonths is number && data.programMonths in [2, 4, 6])) &&
+        (!('programStartDate' in data) || data.programStartDate == '' || isValidDateStr(data.programStartDate)) &&
+        (!('programEndDate' in data) || data.programEndDate == '' || isValidDateStr(data.programEndDate)) &&
         isValidId(data.createdBy) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -470,7 +489,7 @@ service cloud.firestore {
       return data.keys().hasAll(['studentId', 'classId', 'authorUid', 'authorName', 'authorRole', 'note', 'createdAt', 'updatedAt']) &&
         data.keys().hasOnly(['studentId', 'classId', 'authorUid', 'authorName', 'authorRole', 'note', 'createdAt', 'updatedAt']) &&
         isValidId(data.studentId) &&
-        isValidClassId(data.classId) &&
+        isValidStudentClassId(data.classId) &&
         isValidId(data.authorUid) &&
         data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
         data.authorRole in ['head', 'teacher'] &&
@@ -492,15 +511,283 @@ service cloud.firestore {
           'role_change', 'user_add', 'user_remove', 'schedule_update',
           'data_create', 'data_update', 'data_delete', 'report_review',
           'question_approve', 'question_reject', 'announcement_create',
-          'weekly_report_submit', 'alert_handle', 'threshold_update'
+          'weekly_report_submit', 'alert_handle', 'threshold_update',
+          'report_card_draft', 'report_card_submit', 'report_card_finalize',
+          'report_card_unlock', 'report_card_reissue', 'certificate_issue',
+          'certificate_override', 'certificate_revoke', 'certificate_reissue',
+          'school_settings_update'
         ] &&
         data.targetType in [
           'user', 'schedule', 'student', 'report', 'weeklyReport',
-          'question', 'sheet', 'testResult', 'announcement', 'alert', 'settings'
+          'question', 'sheet', 'testResult', 'announcement', 'alert', 'settings',
+          'reportCard', 'certificate', 'vocabOverride'
         ] &&
         data.targetLabel is string && data.targetLabel.size() <= 200 &&
         data.detail is string && data.detail.size() <= 400 &&
         data.createdAt is timestamp;
+    }
+
+    function isValidBrandImageUrl(val) {
+      return val is string && val.size() <= 180000 &&
+        (val == '' || val.matches('^data:image/(jpeg|jpg|png|webp|svg\\+xml);base64,.*'));
+    }
+
+    function isValidSchoolSettings(data) {
+      return data.keys().hasAll([
+          'schoolNameJa', 'schoolNameEn', 'schoolCode', 'logoDataUrl', 'showLogo',
+          'headMasterName', 'headHankoDataUrl', 'senseiHankoDataUrl', 'showHanko',
+          'headSignatureDataUrl', 'showSignature', 'gradeScaleMode',
+          'level5Min', 'level4Min', 'level3Min', 'level2Min',
+          'letterAMin', 'letterBMin', 'letterCMin',
+          'showRankOnReportCard', 'showIdSubtitleOnReportCard',
+          'certSecondLanguage', 'certShowScores',
+          'certMinFinalAvg', 'certMinAttendanceRate', 'certMinAttitudeScore',
+          'updatedBy', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'schoolNameJa', 'schoolNameEn', 'schoolCode', 'logoDataUrl', 'showLogo',
+          'headMasterName', 'headHankoDataUrl', 'senseiHankoDataUrl', 'showHanko',
+          'headSignatureDataUrl', 'showSignature', 'gradeScaleMode',
+          'level5Min', 'level4Min', 'level3Min', 'level2Min',
+          'letterAMin', 'letterBMin', 'letterCMin',
+          'showRankOnReportCard', 'showIdSubtitleOnReportCard',
+          'certSecondLanguage', 'certShowScores',
+          'certMinFinalAvg', 'certMinAttendanceRate', 'certMinAttitudeScore',
+          'updatedBy', 'updatedAt'
+        ]) &&
+        data.schoolNameJa is string && data.schoolNameJa.size() >= 1 && data.schoolNameJa.size() <= 120 &&
+        data.schoolNameEn is string && data.schoolNameEn.size() <= 160 &&
+        data.schoolCode is string && data.schoolCode.size() >= 1 && data.schoolCode.size() <= 12 &&
+        isValidBrandImageUrl(data.logoDataUrl) &&
+        data.showLogo is bool &&
+        data.headMasterName is string && data.headMasterName.size() <= 100 &&
+        isValidBrandImageUrl(data.headHankoDataUrl) &&
+        isValidBrandImageUrl(data.senseiHankoDataUrl) &&
+        data.showHanko is bool &&
+        isValidBrandImageUrl(data.headSignatureDataUrl) &&
+        data.showSignature is bool &&
+        data.gradeScaleMode in ['five_level', 'letter'] &&
+        data.level5Min is number && data.level5Min >= 0 && data.level5Min <= 100 &&
+        data.level4Min is number && data.level4Min >= 0 && data.level4Min <= 100 &&
+        data.level3Min is number && data.level3Min >= 0 && data.level3Min <= 100 &&
+        data.level2Min is number && data.level2Min >= 0 && data.level2Min <= 100 &&
+        data.letterAMin is number && data.letterAMin >= 0 && data.letterAMin <= 100 &&
+        data.letterBMin is number && data.letterBMin >= 0 && data.letterBMin <= 100 &&
+        data.letterCMin is number && data.letterCMin >= 0 && data.letterCMin <= 100 &&
+        data.showRankOnReportCard is bool &&
+        data.showIdSubtitleOnReportCard is bool &&
+        data.certSecondLanguage in ['none', 'id', 'en'] &&
+        data.certShowScores is bool &&
+        data.certMinFinalAvg is number && data.certMinFinalAvg >= 0 && data.certMinFinalAvg <= 100 &&
+        data.certMinAttendanceRate is number && data.certMinAttendanceRate >= 0 && data.certMinAttendanceRate <= 100 &&
+        data.certMinAttitudeScore is number && data.certMinAttitudeScore >= 1 && data.certMinAttitudeScore <= 5 &&
+        isValidId(data.updatedBy) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMonthlyRows(arr) {
+      return arr is list &&
+        arr.size() <= 6 &&
+        (arr.size() == 0 || (
+          arr[0] is map &&
+          arr[0].keys().hasAll(['monthNumber', 'label', 'weeklyAvg', 'cumulativeAvg', 'grade', 'examCount']) &&
+          arr[0].keys().hasOnly(['monthNumber', 'label', 'weeklyAvg', 'cumulativeAvg', 'grade', 'examCount']) &&
+          arr[0].monthNumber is number && arr[0].monthNumber >= 1 && arr[0].monthNumber <= 6 &&
+          arr[0].label is string && arr[0].label.size() <= 40 &&
+          (arr[0].weeklyAvg == null || (arr[0].weeklyAvg is number && arr[0].weeklyAvg >= 0 && arr[0].weeklyAvg <= 100)) &&
+          (arr[0].cumulativeAvg == null || (arr[0].cumulativeAvg is number && arr[0].cumulativeAvg >= 0 && arr[0].cumulativeAvg <= 100)) &&
+          arr[0].grade is string && arr[0].grade.size() <= 10 &&
+          arr[0].examCount is number && arr[0].examCount >= 0 && arr[0].examCount <= 50
+        ));
+    }
+
+    function isValidCategoryRows(arr) {
+      return arr is list &&
+        arr.size() <= 12 &&
+        (arr.size() == 0 || (
+          arr[0] is map &&
+          arr[0].keys().hasAll(['categoryId', 'labelJa', 'labelId', 'avgScore', 'examCount']) &&
+          arr[0].keys().hasOnly(['categoryId', 'labelJa', 'labelId', 'avgScore', 'examCount']) &&
+          arr[0].categoryId is string && arr[0].categoryId.size() <= 40 &&
+          arr[0].avgScore is number && arr[0].avgScore >= 0 && arr[0].avgScore <= 100
+        ));
+    }
+
+    function isValidWeeklySeries(arr) {
+      return arr is list &&
+        arr.size() <= 35 &&
+        (arr.size() == 0 || (
+          arr[0] is map &&
+          arr[0].keys().hasAll(['weekKey', 'score']) &&
+          arr[0].keys().hasOnly(['weekKey', 'score']) &&
+          arr[0].weekKey is string && arr[0].weekKey.size() <= 12 &&
+          arr[0].score is number && arr[0].score >= 0 && arr[0].score <= 100
+        ));
+    }
+
+    function isNullablePct(val) {
+      return val == null || (val is number && val >= 0 && val <= 100);
+    }
+
+    function isNullableScore5(val) {
+      return val == null || (val is number && val >= 1 && val <= 5);
+    }
+
+    function isValidReportCard(data) {
+      return data.keys().hasAll([
+          'studentId', 'studentName', 'studentCode', 'classId', 'programMonths',
+          'programStartDate', 'programEndDate', 'periodType', 'periodMonth', 'periodLabel',
+          'periodStartDate', 'periodEndDate', 'issueDate', 'version', 'status',
+          'senseiComment', 'headComment', 'monthlyRows', 'categoryRows', 'weeklySeries',
+          'cumulativeWeeklyAvg', 'attendanceTotalDays', 'attendancePresentDays',
+          'attendanceAbsentDays', 'attendanceLateDays', 'attendanceRate',
+          'attitudeAvg', 'attitudeSubAttendance', 'attitudeSubDiscipline',
+          'attitudeSubEffort', 'attitudeSubCooperation', 'attitudeGradeLabel',
+          'overallCombinedAvg', 'overallGradeLabel', 'gradeScaleMode',
+          'classRank', 'classSize', 'senseiName', 'headMasterName',
+          'submittedByUid', 'submittedByName', 'submittedAt',
+          'finalizedByUid', 'finalizedByName', 'finalizedAt',
+          'unlockedByName', 'unlockedReason', 'supersededById',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'studentId', 'studentName', 'studentCode', 'classId', 'programMonths',
+          'programStartDate', 'programEndDate', 'periodType', 'periodMonth', 'periodLabel',
+          'periodStartDate', 'periodEndDate', 'issueDate', 'version', 'status',
+          'senseiComment', 'headComment', 'monthlyRows', 'categoryRows', 'weeklySeries',
+          'cumulativeWeeklyAvg', 'attendanceTotalDays', 'attendancePresentDays',
+          'attendanceAbsentDays', 'attendanceLateDays', 'attendanceRate',
+          'attitudeAvg', 'attitudeSubAttendance', 'attitudeSubDiscipline',
+          'attitudeSubEffort', 'attitudeSubCooperation', 'attitudeGradeLabel',
+          'overallCombinedAvg', 'overallGradeLabel', 'gradeScaleMode',
+          'classRank', 'classSize', 'senseiName', 'headMasterName',
+          'submittedByUid', 'submittedByName', 'submittedAt',
+          'finalizedByUid', 'finalizedByName', 'finalizedAt',
+          'unlockedByName', 'unlockedReason', 'supersededById',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.studentId) &&
+        data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 120 &&
+        data.studentCode is string && data.studentCode.size() <= 40 &&
+        isValidClassId(data.classId) &&
+        data.programMonths is number && data.programMonths in [2, 4, 6] &&
+        isValidDateStr(data.programStartDate) &&
+        isValidDateStr(data.programEndDate) &&
+        data.periodType in ['monthly', 'midterm', 'final'] &&
+        data.periodMonth is number && data.periodMonth >= 0 && data.periodMonth <= 6 &&
+        data.periodLabel is string && data.periodLabel.size() >= 1 && data.periodLabel.size() <= 80 &&
+        isValidDateStr(data.periodStartDate) &&
+        isValidDateStr(data.periodEndDate) &&
+        isValidDateStr(data.issueDate) &&
+        data.version is number && data.version >= 1 && data.version <= 100 &&
+        data.status in ['draft', 'waiting_approval', 'finalized', 'superseded'] &&
+        data.senseiComment is string && data.senseiComment.size() <= 2000 &&
+        data.headComment is string && data.headComment.size() <= 2000 &&
+        isValidMonthlyRows(data.monthlyRows) &&
+        isValidCategoryRows(data.categoryRows) &&
+        isValidWeeklySeries(data.weeklySeries) &&
+        isNullablePct(data.cumulativeWeeklyAvg) &&
+        data.attendanceTotalDays is number && data.attendanceTotalDays >= 0 && data.attendanceTotalDays <= 365 &&
+        data.attendancePresentDays is number && data.attendancePresentDays >= 0 && data.attendancePresentDays <= 365 &&
+        data.attendanceAbsentDays is number && data.attendanceAbsentDays >= 0 && data.attendanceAbsentDays <= 365 &&
+        data.attendanceLateDays is number && data.attendanceLateDays >= 0 && data.attendanceLateDays <= 365 &&
+        isNullablePct(data.attendanceRate) &&
+        isNullableScore5(data.attitudeAvg) &&
+        isNullableScore5(data.attitudeSubAttendance) &&
+        isNullableScore5(data.attitudeSubDiscipline) &&
+        isNullableScore5(data.attitudeSubEffort) &&
+        isNullableScore5(data.attitudeSubCooperation) &&
+        data.attitudeGradeLabel is string && data.attitudeGradeLabel.size() <= 10 &&
+        isNullablePct(data.overallCombinedAvg) &&
+        data.overallGradeLabel is string && data.overallGradeLabel.size() <= 10 &&
+        data.gradeScaleMode in ['five_level', 'letter'] &&
+        (data.classRank == null || (data.classRank is number && data.classRank >= 1 && data.classRank <= 200)) &&
+        data.classSize is number && data.classSize >= 0 && data.classSize <= 200 &&
+        data.senseiName is string && data.senseiName.size() <= 100 &&
+        data.headMasterName is string && data.headMasterName.size() <= 100 &&
+        data.submittedByUid is string && data.submittedByUid.size() <= 128 &&
+        data.submittedByName is string && data.submittedByName.size() <= 100 &&
+        data.submittedAt is string && data.submittedAt.size() <= 40 &&
+        data.finalizedByUid is string && data.finalizedByUid.size() <= 128 &&
+        data.finalizedByName is string && data.finalizedByName.size() <= 100 &&
+        data.finalizedAt is string && data.finalizedAt.size() <= 40 &&
+        data.unlockedByName is string && data.unlockedByName.size() <= 100 &&
+        data.unlockedReason is string && data.unlockedReason.size() <= 300 &&
+        data.supersededById is string && data.supersededById.size() <= 128 &&
+        isValidId(data.createdBy) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCertificate(data) {
+      return data.keys().hasAll([
+          'certificateNumber', 'studentId', 'studentName', 'studentCode', 'classId',
+          'programMonths', 'programStartDate', 'programEndDate', 'completionDate', 'issueDate',
+          'version', 'status', 'finalAvg', 'attendanceRate', 'attitudeAvg', 'overallGradeLabel',
+          'overrideUsed', 'overrideNote', 'revokeReason', 'revokedAt', 'revokedByName',
+          'supersededById', 'issuedByUid', 'issuedByName', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'certificateNumber', 'studentId', 'studentName', 'studentCode', 'classId',
+          'programMonths', 'programStartDate', 'programEndDate', 'completionDate', 'issueDate',
+          'version', 'status', 'finalAvg', 'attendanceRate', 'attitudeAvg', 'overallGradeLabel',
+          'overrideUsed', 'overrideNote', 'revokeReason', 'revokedAt', 'revokedByName',
+          'supersededById', 'issuedByUid', 'issuedByName', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.certificateNumber) &&
+        isValidId(data.studentId) &&
+        data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 120 &&
+        data.studentCode is string && data.studentCode.size() <= 40 &&
+        isValidClassId(data.classId) &&
+        data.programMonths is number && data.programMonths in [2, 4, 6] &&
+        isValidDateStr(data.programStartDate) &&
+        isValidDateStr(data.programEndDate) &&
+        isValidDateStr(data.completionDate) &&
+        isValidDateStr(data.issueDate) &&
+        data.version is number && data.version >= 1 && data.version <= 100 &&
+        data.status in ['valid', 'revoked', 'superseded'] &&
+        isNullablePct(data.finalAvg) &&
+        isNullablePct(data.attendanceRate) &&
+        isNullableScore5(data.attitudeAvg) &&
+        data.overallGradeLabel is string && data.overallGradeLabel.size() <= 10 &&
+        data.overrideUsed is bool &&
+        data.overrideNote is string && data.overrideNote.size() <= 400 &&
+        data.revokeReason is string && data.revokeReason.size() <= 400 &&
+        data.revokedAt is string && data.revokedAt.size() <= 40 &&
+        data.revokedByName is string && data.revokedByName.size() <= 100 &&
+        data.supersededById is string && data.supersededById.size() <= 128 &&
+        isValidId(data.issuedByUid) &&
+        data.issuedByName is string && data.issuedByName.size() >= 1 && data.issuedByName.size() <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCertificateVerification(data) {
+      return data.keys().hasAll([
+          'certificateNumber', 'studentName', 'programLabel', 'completionDate',
+          'issueDate', 'schoolNameJa', 'status', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'certificateNumber', 'studentName', 'programLabel', 'completionDate',
+          'issueDate', 'schoolNameJa', 'status', 'updatedAt'
+        ]) &&
+        isValidId(data.certificateNumber) &&
+        data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 120 &&
+        data.programLabel is string && data.programLabel.size() >= 1 && data.programLabel.size() <= 120 &&
+        isValidDateStr(data.completionDate) &&
+        isValidDateStr(data.issueDate) &&
+        data.schoolNameJa is string && data.schoolNameJa.size() >= 1 && data.schoolNameJa.size() <= 120 &&
+        data.status in ['valid', 'revoked'] &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCertCounter(data) {
+      return data.keys().hasAll(['year', 'lastSeq', 'updatedBy', 'updatedAt']) &&
+        data.keys().hasOnly(['year', 'lastSeq', 'updatedBy', 'updatedAt']) &&
+        data.year is number && data.year >= 2020 && data.year <= 2100 &&
+        data.lastSeq is number && data.lastSeq >= 0 && data.lastSeq <= 999999 &&
+        isValidId(data.updatedBy) &&
+        data.updatedAt is timestamp;
     }
 
     // ------------------------------------------------------------------
@@ -570,16 +857,19 @@ service cloud.firestore {
       allow delete: if isValidId(inviteId) && (isHead() || (isVerified() && existing().email == request.auth.token.email.lower()));
     }
 
-    // Students
+    // Students (Head reads/assigns all incl. unassigned; teachers read/edit only students in assignedClasses)
     match /students/{studentId} {
-      allow get: if isValidId(studentId) && isActiveStaff();
-      allow list: if isActiveStaff();
+      allow get: if isValidId(studentId) && (isHead() || (existing().classId != '' && teacherHasClass(existing().classId)));
+      allow list: if isHead() || (existing().classId != '' && teacherHasClass(existing().classId));
       allow create: if isValidId(studentId) &&
         isActiveStaff() &&
         isValidStudent(incoming()) &&
         incoming().createdBy == request.auth.uid &&
         incoming().createdAt == request.time &&
-        incoming().updatedAt == request.time;
+        incoming().updatedAt == request.time && (
+          isHead() ||
+          (incoming().classId != '' && teacherHasClass(incoming().classId))
+        );
       allow update: if isValidId(studentId) &&
         isActiveStaff() &&
         isValidStudent(incoming()) &&
@@ -587,7 +877,10 @@ service cloud.firestore {
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time && (
           isHead() ||
-          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'studentCode', 'classId', 'targetGoal', 'active', 'notes', 'updatedAt'])
+          (existing().classId != '' &&
+            teacherHasClass(existing().classId) &&
+            incoming().classId == existing().classId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'studentCode', 'targetGoal', 'active', 'notes', 'updatedAt']))
         );
       allow delete: if isValidId(studentId) && isHead();
     }
@@ -853,13 +1146,14 @@ service cloud.firestore {
       allow delete: if isValidId(alertId) && isHead();
     }
 
-    // Student Profile Notes
+    // Student Profile Notes (Head reads all; teachers read/create only for their assigned classes)
     match /studentNotes/{noteId} {
-      allow get: if isValidId(noteId) && isActiveStaff();
-      allow list: if isActiveStaff();
+      allow get: if isValidId(noteId) && (isHead() || (existing().classId != '' && teacherHasClass(existing().classId)));
+      allow list: if isHead() || (existing().classId != '' && teacherHasClass(existing().classId));
       allow create: if isValidId(noteId) &&
         isActiveStaff() &&
         isValidStudentProfileNote(incoming()) &&
+        (isHead() || (incoming().classId != '' && teacherHasClass(incoming().classId))) &&
         incoming().authorUid == request.auth.uid &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
@@ -888,6 +1182,175 @@ service cloud.firestore {
         incoming().actorUid == request.auth.uid &&
         incoming().createdAt == request.time;
       allow update, delete: if false;
+    }
+
+    // School Settings (Branding, Grade Scales, Hanko Seals, Certificate Thresholds)
+    match /schoolSettings/{settingId} {
+      allow get: if isValidId(settingId) && isActiveStaff();
+      allow list: if isActiveStaff();
+      allow create, update: if isValidId(settingId) &&
+        isHead() &&
+        isValidSchoolSettings(incoming()) &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(settingId) && isHead();
+    }
+
+    // Report Cards (Sensei can read/draft/submit own class; Admin can approve/finalize/unlock/reissue all)
+    match /reportCards/{cardId} {
+      allow get: if isValidId(cardId) && (isHead() || teacherHasClass(existing().classId));
+      allow list: if isHead() || teacherHasClass(existing().classId);
+      allow create: if isValidId(cardId) &&
+        isActiveStaff() &&
+        isValidReportCard(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isHead() ||
+          (teacherHasClass(incoming().classId) &&
+            incoming().status in ['draft', 'waiting_approval'] &&
+            incoming().headComment == '' &&
+            incoming().finalizedByUid == '' &&
+            incoming().finalizedByName == '' &&
+            incoming().finalizedAt == '' &&
+            incoming().unlockedByName == '' &&
+            incoming().unlockedReason == '' &&
+            incoming().supersededById == '')
+        );
+      allow update: if isValidId(cardId) &&
+        isActiveStaff() &&
+        isValidReportCard(incoming()) &&
+        incoming().studentId == existing().studentId &&
+        incoming().classId == existing().classId &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isHead() ||
+          (teacherHasClass(existing().classId) &&
+            existing().status in ['draft', 'waiting_approval'] &&
+            incoming().status in ['draft', 'waiting_approval'] &&
+            incoming().headComment == existing().headComment &&
+            incoming().finalizedByUid == existing().finalizedByUid &&
+            incoming().finalizedByName == existing().finalizedByName &&
+            incoming().finalizedAt == existing().finalizedAt &&
+            incoming().unlockedByName == existing().unlockedByName &&
+            incoming().unlockedReason == existing().unlockedReason &&
+            incoming().supersededById == existing().supersededById &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'studentName', 'studentCode', 'programMonths', 'programStartDate', 'programEndDate',
+              'periodType', 'periodMonth', 'periodLabel', 'periodStartDate', 'periodEndDate',
+              'issueDate', 'status', 'senseiComment', 'monthlyRows', 'categoryRows', 'weeklySeries',
+              'cumulativeWeeklyAvg', 'attendanceTotalDays', 'attendancePresentDays',
+              'attendanceAbsentDays', 'attendanceLateDays', 'attendanceRate',
+              'attitudeAvg', 'attitudeSubAttendance', 'attitudeSubDiscipline',
+              'attitudeSubEffort', 'attitudeSubCooperation', 'attitudeGradeLabel',
+              'overallCombinedAvg', 'overallGradeLabel', 'gradeScaleMode',
+              'classRank', 'classSize', 'senseiName', 'headMasterName',
+              'submittedByUid', 'submittedByName', 'submittedAt', 'updatedAt'
+            ]))
+        );
+      allow delete: if isValidId(cardId) && isHead();
+    }
+
+    // Completion Certificates (Admin issues/revokes/reissues; class sensei may read for student profile)
+    match /certificates/{certId} {
+      allow get: if isValidId(certId) && (isHead() || teacherHasClass(existing().classId));
+      allow list: if isHead() || teacherHasClass(existing().classId);
+      allow create: if isValidId(certId) &&
+        isHead() &&
+        isValidCertificate(incoming()) &&
+        incoming().issuedByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(certId) &&
+        isHead() &&
+        isValidCertificate(incoming()) &&
+        incoming().certificateNumber == existing().certificateNumber &&
+        incoming().studentId == existing().studentId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(certId) && isHead();
+    }
+
+    // Public QR Certificate Verification (single-get only; zero scores or private data)
+    match /certificateVerifications/{certNumber} {
+      allow get: if isValidId(certNumber);
+      allow list: if false;
+      allow create, update: if isValidId(certNumber) &&
+        isHead() &&
+        isValidCertificateVerification(incoming()) &&
+        incoming().certificateNumber == certNumber &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(certNumber) && isHead();
+    }
+
+    // Atomic Certificate Number Counters (Admin-only)
+    match /counters/{counterId} {
+      allow get: if isValidId(counterId) && isHead();
+      allow list: if isHead();
+      allow create, update: if isValidId(counterId) &&
+        isHead() &&
+        isValidCertCounter(incoming()) &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // One-time Admin Migrations Lock (create-once, read-by-admin, immutable)
+    match /systemMigrations/{migrationId} {
+      allow get: if isValidId(migrationId) && isHead();
+      allow list: if false;
+      allow create: if isValidId(migrationId) &&
+        isHead() &&
+        incoming().keys().hasAll(['executedBy', 'addedCount', 'skippedCount', 'createdAt']) &&
+        incoming().keys().hasOnly(['executedBy', 'addedCount', 'skippedCount', 'createdAt']) &&
+        isValidId(incoming().executedBy) &&
+        incoming().executedBy == request.auth.uid &&
+        incoming().addedCount is number && incoming().addedCount >= 0 && incoming().addedCount <= 1000 &&
+        incoming().skippedCount is number && incoming().skippedCount >= 0 && incoming().skippedCount <= 1000 &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // JLPT Core Vocabulary Indonesian Translation Overrides (Editable by Active Staff)
+    function isValidVocabOverride(data) {
+      return data.keys().hasAll(['vocabId', 'customMeaningId', 'customNote', 'updatedBy', 'updatedByName', 'updatedAt']) &&
+        data.keys().hasOnly(['vocabId', 'customMeaningId', 'customNote', 'updatedBy', 'updatedByName', 'updatedAt']) &&
+        isValidId(data.vocabId) && data.vocabId.size() <= 40 &&
+        data.customMeaningId is list &&
+        data.customMeaningId.size() >= 1 &&
+        data.customMeaningId.size() <= 10 &&
+        data.customMeaningId[0] is string &&
+        data.customMeaningId[0].size() >= 1 &&
+        data.customMeaningId[0].size() <= 120 &&
+        data.customNote is string && data.customNote.size() <= 300 &&
+        isValidId(data.updatedBy) &&
+        data.updatedByName is string && data.updatedByName.size() >= 1 && data.updatedByName.size() <= 100 &&
+        data.updatedAt is timestamp;
+    }
+
+    match /vocabOverrides/{vocabId} {
+      allow get: if isValidId(vocabId) && isActiveStaff();
+      allow list: if isActiveStaff();
+      allow create: if isValidId(vocabId) &&
+        isActiveStaff() &&
+        isValidVocabOverride(incoming()) &&
+        incoming().vocabId == vocabId &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(vocabId) &&
+        isActiveStaff() &&
+        isValidVocabOverride(incoming()) &&
+        incoming().vocabId == vocabId &&
+        incoming().vocabId == existing().vocabId &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().updatedAt == request.time && (
+          isHead() ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'customMeaningId', 'customNote', 'updatedBy', 'updatedByName', 'updatedAt'
+          ])
+        );
+      allow delete: if isValidId(vocabId) && isActiveStaff();
     }
   }
 }

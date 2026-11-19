@@ -100,14 +100,19 @@ export interface StaffInvite {
   createdAt?: unknown;
 }
 
+export type ProgramDurationMonths = 2 | 4 | 6;
+
 export interface Student {
   id: string;
   name: string;
   studentCode: string;
-  classId: ClassId;
+  classId: ClassId | '';
   targetGoal: string;
   active: boolean;
   notes: string;
+  programMonths?: ProgramDurationMonths;
+  programStartDate?: string;
+  programEndDate?: string;
   createdBy: string;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -390,7 +395,17 @@ export type ActivityActionType =
   | 'announcement_create'
   | 'weekly_report_submit'
   | 'alert_handle'
-  | 'threshold_update';
+  | 'threshold_update'
+  | 'report_card_draft'
+  | 'report_card_submit'
+  | 'report_card_finalize'
+  | 'report_card_unlock'
+  | 'report_card_reissue'
+  | 'certificate_issue'
+  | 'certificate_override'
+  | 'certificate_revoke'
+  | 'certificate_reissue'
+  | 'school_settings_update';
 
 export type ActivityTargetType =
   | 'user'
@@ -403,7 +418,10 @@ export type ActivityTargetType =
   | 'testResult'
   | 'announcement'
   | 'alert'
-  | 'settings';
+  | 'settings'
+  | 'reportCard'
+  | 'certificate'
+  | 'vocabOverride';
 
 export interface ActivityLogEntry {
   id: string;
@@ -414,5 +432,244 @@ export interface ActivityLogEntry {
   targetLabel: string;
   detail: string;
   createdAt?: unknown;
+}
+
+export type GradeScaleMode = 'five_level' | 'letter';
+export type CertificateSecondLanguage = 'none' | 'id' | 'en';
+
+export interface SchoolSettings {
+  schoolNameJa: string;
+  schoolNameEn: string;
+  schoolCode: string;
+  logoDataUrl: string;
+  showLogo: boolean;
+  headMasterName: string;
+  headHankoDataUrl: string;
+  senseiHankoDataUrl: string;
+  showHanko: boolean;
+  headSignatureDataUrl: string;
+  showSignature: boolean;
+  gradeScaleMode: GradeScaleMode;
+  level5Min: number;
+  level4Min: number;
+  level3Min: number;
+  level2Min: number;
+  letterAMin: number;
+  letterBMin: number;
+  letterCMin: number;
+  showRankOnReportCard: boolean;
+  showIdSubtitleOnReportCard: boolean;
+  certSecondLanguage: CertificateSecondLanguage;
+  certShowScores: boolean;
+  certMinFinalAvg: number;
+  certMinAttendanceRate: number;
+  certMinAttitudeScore: number;
+  updatedBy: string;
+  updatedAt?: unknown;
+}
+
+export const DEFAULT_SCHOOL_SETTINGS: SchoolSettings = {
+  schoolNameJa: '元気アカデミー日本語学校',
+  schoolNameEn: 'GENKI ACADEMY JAPANESE LANGUAGE SCHOOL',
+  schoolCode: 'GA',
+  logoDataUrl: '',
+  showLogo: true,
+  headMasterName: 'Alif Viandra',
+  headHankoDataUrl: '',
+  senseiHankoDataUrl: '',
+  showHanko: true,
+  headSignatureDataUrl: '',
+  showSignature: true,
+  gradeScaleMode: 'five_level',
+  level5Min: 90,
+  level4Min: 80,
+  level3Min: 70,
+  level2Min: 60,
+  letterAMin: 90,
+  letterBMin: 80,
+  letterCMin: 70,
+  showRankOnReportCard: false,
+  showIdSubtitleOnReportCard: true,
+  certSecondLanguage: 'id',
+  certShowScores: false,
+  certMinFinalAvg: 70,
+  certMinAttendanceRate: 85,
+  certMinAttitudeScore: 3.0,
+  updatedBy: '',
+};
+
+export type ReportCardPeriodType = 'monthly' | 'midterm' | 'final';
+export type ReportCardStatus = 'draft' | 'waiting_approval' | 'finalized' | 'superseded';
+
+export interface ReportCardMonthRow {
+  monthNumber: number;
+  label: string;
+  weeklyAvg: number | null;
+  cumulativeAvg: number | null;
+  grade: string;
+  examCount: number;
+}
+
+export interface ReportCardCategoryRow {
+  categoryId: string;
+  labelJa: string;
+  labelId: string;
+  avgScore: number;
+  examCount: number;
+}
+
+export interface ReportCardWeeklyPoint {
+  weekKey: string;
+  score: number;
+}
+
+export interface ReportCard {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentCode: string;
+  classId: ClassId;
+  programMonths: ProgramDurationMonths;
+  programStartDate: string;
+  programEndDate: string;
+  periodType: ReportCardPeriodType;
+  periodMonth: number;
+  periodLabel: string;
+  periodStartDate: string;
+  periodEndDate: string;
+  issueDate: string;
+  version: number;
+  status: ReportCardStatus;
+  senseiComment: string;
+  headComment: string;
+  monthlyRows: ReportCardMonthRow[];
+  categoryRows: ReportCardCategoryRow[];
+  weeklySeries: ReportCardWeeklyPoint[];
+  cumulativeWeeklyAvg: number | null;
+  attendanceTotalDays: number;
+  attendancePresentDays: number;
+  attendanceAbsentDays: number;
+  attendanceLateDays: number;
+  attendanceRate: number | null;
+  attitudeAvg: number | null;
+  attitudeSubAttendance: number | null;
+  attitudeSubDiscipline: number | null;
+  attitudeSubEffort: number | null;
+  attitudeSubCooperation: number | null;
+  attitudeGradeLabel: string;
+  overallCombinedAvg: number | null;
+  overallGradeLabel: string;
+  gradeScaleMode: GradeScaleMode;
+  classRank: number | null;
+  classSize: number;
+  senseiName: string;
+  headMasterName: string;
+  submittedByUid: string;
+  submittedByName: string;
+  submittedAt: string;
+  finalizedByUid: string;
+  finalizedByName: string;
+  finalizedAt: string;
+  unlockedByName: string;
+  unlockedReason: string;
+  supersededById: string;
+  createdBy: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export type CertificateStatus = 'valid' | 'revoked' | 'superseded';
+
+export interface CertificateRecord {
+  id: string;
+  certificateNumber: string;
+  studentId: string;
+  studentName: string;
+  studentCode: string;
+  classId: ClassId;
+  programMonths: ProgramDurationMonths;
+  programStartDate: string;
+  programEndDate: string;
+  completionDate: string;
+  issueDate: string;
+  version: number;
+  status: CertificateStatus;
+  finalAvg: number | null;
+  attendanceRate: number | null;
+  attitudeAvg: number | null;
+  overallGradeLabel: string;
+  overrideUsed: boolean;
+  overrideNote: string;
+  revokeReason: string;
+  revokedAt: string;
+  revokedByName: string;
+  supersededById: string;
+  issuedByUid: string;
+  issuedByName: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface CertificateVerificationDoc {
+  certificateNumber: string;
+  studentName: string;
+  programLabel: string;
+  completionDate: string;
+  issueDate: string;
+  schoolNameJa: string;
+  status: 'valid' | 'revoked';
+  updatedAt?: unknown;
+}
+
+export type JlptLevel = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
+
+export interface JlptVocabEntry {
+  id: string;
+  jlpt: JlptLevel;
+  word: string;
+  reading: string;
+  usuallyKana: boolean;
+  pos: string[];
+  meaningEn: string[];
+  meaningId: string[];
+}
+
+export interface VocabTranslationOverride {
+  id: string;
+  vocabId: string;
+  customMeaningId: string[];
+  customNote: string;
+  updatedBy: string;
+  updatedByName: string;
+  updatedAt?: unknown;
+}
+
+export type CurriculumProgram = 'jlpt_core' | 'minna_1_50' | 'jlpt_n4' | 'jft_basic_a2';
+
+export type PedagogicalQuestionType =
+  | 'multiple_choice'
+  | 'fill_blank'
+  | 'sentence_completion'
+  | 'sentence_arrangement'
+  | 'kanji_reading'
+  | 'reading_comprehension';
+
+export interface StagedGeneratedQuestion {
+  tempId: string;
+  selected: boolean;
+  classId: ClassId | 'all';
+  category: Exclude<QuestionCategory, 'listening'>;
+  testType: TestType;
+  questionFormat: 'multiple_choice' | 'written';
+  pedagogicalType: PedagogicalQuestionType;
+  program: CurriculumProgram;
+  chapterGroup: string;
+  prompt: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+  points: number;
+  hasFurigana: boolean;
+  sourceVocabId?: string;
 }
 

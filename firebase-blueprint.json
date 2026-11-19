@@ -128,7 +128,8 @@
         },
         "classId": {
           "type": "string",
-          "enum": ["hokkaido", "saitama", "nara", "kaigo"]
+          "enum": ["", "hokkaido", "saitama", "nara", "kaigo"],
+          "description": "Assigned class ID, or empty string for unassigned students."
         },
         "targetGoal": {
           "type": "string",
@@ -140,6 +141,20 @@
         "notes": {
           "type": "string",
           "maxLength": 500
+        },
+        "programMonths": {
+          "type": "number",
+          "description": "Program duration in months (2, 4, or 6)."
+        },
+        "programStartDate": {
+          "type": "string",
+          "maxLength": 10,
+          "description": "Program start date (YYYY-MM-DD)."
+        },
+        "programEndDate": {
+          "type": "string",
+          "maxLength": 10,
+          "description": "Auto-calculated program end date (YYYY-MM-DD)."
         },
         "createdBy": {
           "type": "string",
@@ -623,14 +638,19 @@
             "role_change", "user_add", "user_remove", "schedule_update",
             "data_create", "data_update", "data_delete", "report_review",
             "question_approve", "question_reject", "announcement_create",
-            "weekly_report_submit", "alert_handle", "threshold_update"
+            "weekly_report_submit", "alert_handle", "threshold_update",
+            "report_card_draft", "report_card_submit", "report_card_finalize",
+            "report_card_unlock", "report_card_reissue", "certificate_issue",
+            "certificate_override", "certificate_revoke", "certificate_reissue",
+            "school_settings_update"
           ]
         },
         "targetType": {
           "type": "string",
           "enum": [
             "user", "schedule", "student", "report", "weeklyReport",
-            "question", "sheet", "testResult", "announcement", "alert", "settings"
+            "question", "sheet", "testResult", "announcement", "alert", "settings",
+            "reportCard", "certificate", "vocabOverride"
           ]
         },
         "targetLabel": {
@@ -788,6 +808,220 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["studentId", "classId", "authorUid", "authorName", "authorRole", "note", "createdAt", "updatedAt"]
+    },
+    "SchoolSettings": {
+      "title": "SchoolSettings",
+      "description": "School branding, grade scales, seals/signatures, and certificate eligibility thresholds.",
+      "type": "object",
+      "properties": {
+        "schoolNameJa": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "schoolNameEn": { "type": "string", "maxLength": 160 },
+        "schoolCode": { "type": "string", "minLength": 1, "maxLength": 12 },
+        "logoDataUrl": { "type": "string", "maxLength": 180000 },
+        "showLogo": { "type": "boolean" },
+        "headMasterName": { "type": "string", "maxLength": 100 },
+        "headHankoDataUrl": { "type": "string", "maxLength": 180000 },
+        "senseiHankoDataUrl": { "type": "string", "maxLength": 180000 },
+        "showHanko": { "type": "boolean" },
+        "headSignatureDataUrl": { "type": "string", "maxLength": 180000 },
+        "showSignature": { "type": "boolean" },
+        "gradeScaleMode": { "type": "string", "enum": ["five_level", "letter"] },
+        "level5Min": { "type": "number" },
+        "level4Min": { "type": "number" },
+        "level3Min": { "type": "number" },
+        "level2Min": { "type": "number" },
+        "letterAMin": { "type": "number" },
+        "letterBMin": { "type": "number" },
+        "letterCMin": { "type": "number" },
+        "showRankOnReportCard": { "type": "boolean" },
+        "showIdSubtitleOnReportCard": { "type": "boolean" },
+        "certSecondLanguage": { "type": "string", "enum": ["none", "id", "en"] },
+        "certShowScores": { "type": "boolean" },
+        "certMinFinalAvg": { "type": "number" },
+        "certMinAttendanceRate": { "type": "number" },
+        "certMinAttitudeScore": { "type": "number" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "schoolNameJa", "schoolNameEn", "schoolCode", "logoDataUrl", "showLogo",
+        "headMasterName", "headHankoDataUrl", "senseiHankoDataUrl", "showHanko",
+        "headSignatureDataUrl", "showSignature", "gradeScaleMode",
+        "level5Min", "level4Min", "level3Min", "level2Min",
+        "letterAMin", "letterBMin", "letterCMin",
+        "showRankOnReportCard", "showIdSubtitleOnReportCard",
+        "certSecondLanguage", "certShowScores",
+        "certMinFinalAvg", "certMinAttendanceRate", "certMinAttitudeScore",
+        "updatedBy", "updatedAt"
+      ]
+    },
+    "ReportCard": {
+      "title": "ReportCard",
+      "description": "Student Report Card (通知表) with workflow status, version history, computed scores, and comments.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "studentCode": { "type": "string", "maxLength": 40 },
+        "classId": { "type": "string", "enum": ["hokkaido", "saitama", "nara", "kaigo"] },
+        "programMonths": { "type": "number" },
+        "programStartDate": { "type": "string", "maxLength": 10 },
+        "programEndDate": { "type": "string", "maxLength": 10 },
+        "periodType": { "type": "string", "enum": ["monthly", "midterm", "final"] },
+        "periodMonth": { "type": "number" },
+        "periodLabel": { "type": "string", "maxLength": 80 },
+        "periodStartDate": { "type": "string", "maxLength": 10 },
+        "periodEndDate": { "type": "string", "maxLength": 10 },
+        "issueDate": { "type": "string", "maxLength": 10 },
+        "version": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "waiting_approval", "finalized", "superseded"] },
+        "senseiComment": { "type": "string", "maxLength": 2000 },
+        "headComment": { "type": "string", "maxLength": 2000 },
+        "monthlyRows": { "type": "array" },
+        "categoryRows": { "type": "array" },
+        "weeklySeries": { "type": "array" },
+        "cumulativeWeeklyAvg": { "type": "number" },
+        "attendanceTotalDays": { "type": "number" },
+        "attendancePresentDays": { "type": "number" },
+        "attendanceAbsentDays": { "type": "number" },
+        "attendanceLateDays": { "type": "number" },
+        "attendanceRate": { "type": "number" },
+        "attitudeAvg": { "type": "number" },
+        "attitudeSubAttendance": { "type": "number" },
+        "attitudeSubDiscipline": { "type": "number" },
+        "attitudeSubEffort": { "type": "number" },
+        "attitudeSubCooperation": { "type": "number" },
+        "attitudeGradeLabel": { "type": "string", "maxLength": 10 },
+        "overallCombinedAvg": { "type": "number" },
+        "overallGradeLabel": { "type": "string", "maxLength": 10 },
+        "gradeScaleMode": { "type": "string", "enum": ["five_level", "letter"] },
+        "classRank": { "type": "number" },
+        "classSize": { "type": "number" },
+        "senseiName": { "type": "string", "maxLength": 100 },
+        "headMasterName": { "type": "string", "maxLength": 100 },
+        "submittedByUid": { "type": "string", "maxLength": 128 },
+        "submittedByName": { "type": "string", "maxLength": 100 },
+        "submittedAt": { "type": "string", "maxLength": 40 },
+        "finalizedByUid": { "type": "string", "maxLength": 128 },
+        "finalizedByName": { "type": "string", "maxLength": 100 },
+        "finalizedAt": { "type": "string", "maxLength": 40 },
+        "unlockedByName": { "type": "string", "maxLength": 100 },
+        "unlockedReason": { "type": "string", "maxLength": 300 },
+        "supersededById": { "type": "string", "maxLength": 128 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "studentId", "studentName", "studentCode", "classId", "programMonths",
+        "programStartDate", "programEndDate", "periodType", "periodMonth", "periodLabel",
+        "periodStartDate", "periodEndDate", "issueDate", "version", "status",
+        "senseiComment", "headComment", "monthlyRows", "categoryRows", "weeklySeries",
+        "cumulativeWeeklyAvg", "attendanceTotalDays", "attendancePresentDays",
+        "attendanceAbsentDays", "attendanceLateDays", "attendanceRate",
+        "attitudeAvg", "attitudeSubAttendance", "attitudeSubDiscipline",
+        "attitudeSubEffort", "attitudeSubCooperation", "attitudeGradeLabel",
+        "overallCombinedAvg", "overallGradeLabel", "gradeScaleMode",
+        "classRank", "classSize", "senseiName", "headMasterName",
+        "submittedByUid", "submittedByName", "submittedAt",
+        "finalizedByUid", "finalizedByName", "finalizedAt",
+        "unlockedByName", "unlockedReason", "supersededById",
+        "createdBy", "createdAt", "updatedAt"
+      ]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Completion Certificate (修了証書) issued by Admin with atomic sequence number and version tracking.",
+      "type": "object",
+      "properties": {
+        "certificateNumber": { "type": "string", "maxLength": 40 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "studentCode": { "type": "string", "maxLength": 40 },
+        "classId": { "type": "string", "enum": ["hokkaido", "saitama", "nara", "kaigo"] },
+        "programMonths": { "type": "number" },
+        "programStartDate": { "type": "string", "maxLength": 10 },
+        "programEndDate": { "type": "string", "maxLength": 10 },
+        "completionDate": { "type": "string", "maxLength": 10 },
+        "issueDate": { "type": "string", "maxLength": 10 },
+        "version": { "type": "number" },
+        "status": { "type": "string", "enum": ["valid", "revoked", "superseded"] },
+        "finalAvg": { "type": "number" },
+        "attendanceRate": { "type": "number" },
+        "attitudeAvg": { "type": "number" },
+        "overallGradeLabel": { "type": "string", "maxLength": 10 },
+        "overrideUsed": { "type": "boolean" },
+        "overrideNote": { "type": "string", "maxLength": 400 },
+        "revokeReason": { "type": "string", "maxLength": 400 },
+        "revokedAt": { "type": "string", "maxLength": 40 },
+        "revokedByName": { "type": "string", "maxLength": 100 },
+        "supersededById": { "type": "string", "maxLength": 128 },
+        "issuedByUid": { "type": "string", "maxLength": 128 },
+        "issuedByName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "certificateNumber", "studentId", "studentName", "studentCode", "classId",
+        "programMonths", "programStartDate", "programEndDate", "completionDate", "issueDate",
+        "version", "status", "finalAvg", "attendanceRate", "attitudeAvg", "overallGradeLabel",
+        "overrideUsed", "overrideNote", "revokeReason", "revokedAt", "revokedByName",
+        "supersededById", "issuedByUid", "issuedByName", "createdAt", "updatedAt"
+      ]
+    },
+    "CertificateVerification": {
+      "title": "CertificateVerification",
+      "description": "Public QR verification document storing only public non-score certificate authenticity fields.",
+      "type": "object",
+      "properties": {
+        "certificateNumber": { "type": "string", "maxLength": 40 },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "programLabel": { "type": "string", "maxLength": 120 },
+        "completionDate": { "type": "string", "maxLength": 10 },
+        "issueDate": { "type": "string", "maxLength": 10 },
+        "schoolNameJa": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["valid", "revoked"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["certificateNumber", "studentName", "programLabel", "completionDate", "issueDate", "schoolNameJa", "status", "updatedAt"]
+    },
+    "CertCounter": {
+      "title": "CertCounter",
+      "description": "Atomic sequential counter for unique annual certificate numbers.",
+      "type": "object",
+      "properties": {
+        "year": { "type": "number" },
+        "lastSeq": { "type": "number" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["year", "lastSeq", "updatedBy", "updatedAt"]
+    },
+    "SystemMigration": {
+      "title": "SystemMigration",
+      "description": "One-time admin-only migration completion lock.",
+      "type": "object",
+      "properties": {
+        "executedBy": { "type": "string", "maxLength": 128 },
+        "addedCount": { "type": "number" },
+        "skippedCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["executedBy", "addedCount", "skippedCount", "createdAt"]
+    },
+    "VocabOverride": {
+      "title": "VocabOverride",
+      "description": "Sensei and Admin editable Indonesian translations and contextual notes for JLPT core vocabulary IDs.",
+      "type": "object",
+      "properties": {
+        "vocabId": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "customMeaningId": { "type": "array" },
+        "customNote": { "type": "string", "maxLength": 300 },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedByName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vocabId", "customMeaningId", "customNote", "updatedBy", "updatedByName", "updatedAt"]
     }
   },
   "firestore": {
@@ -858,6 +1092,34 @@
     "/activityLogs/{logId}": {
       "schema": { "$ref": "#/entities/ActivityLog" },
       "description": "Immutable admin-only activity audit log."
+    },
+    "/schoolSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/SchoolSettings" },
+      "description": "School branding, grade scales, seals/signatures, and certificate settings."
+    },
+    "/reportCards/{cardId}": {
+      "schema": { "$ref": "#/entities/ReportCard" },
+      "description": "Generated and finalized student report cards (通知表)."
+    },
+    "/certificates/{certId}": {
+      "schema": { "$ref": "#/entities/Certificate" },
+      "description": "Issued completion certificates (修了証書)."
+    },
+    "/certificateVerifications/{certNumber}": {
+      "schema": { "$ref": "#/entities/CertificateVerification" },
+      "description": "Public QR verification lookup records (single-get only, no scores or PII)."
+    },
+    "/counters/{counterId}": {
+      "schema": { "$ref": "#/entities/CertCounter" },
+      "description": "Atomic certificate sequence counters."
+    },
+    "/systemMigrations/{migrationId}": {
+      "schema": { "$ref": "#/entities/SystemMigration" },
+      "description": "One-time admin-only idempotent seed locks."
+    },
+    "/vocabOverrides/{vocabId}": {
+      "schema": { "$ref": "#/entities/VocabOverride" },
+      "description": "Contextual Indonesian translation overrides and notes for core JLPT vocabulary entries."
     }
   }
 }

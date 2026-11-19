@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  Award,
   BookLock,
   BookOpen,
   Calendar,
@@ -9,6 +10,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Search,
+  Settings,
   ShieldCheck,
   UserCheck,
   Users,
@@ -17,7 +19,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { classLabel } from '../i18n';
 import { ClassId, CLASSES, LanguageMode, Student, UserProfile } from '../types';
-import { CLASS_THEMES } from '../utils/classTheme';
+import { CLASS_THEMES, getClassTheme } from '../utils/classTheme';
 
 export type JumpTarget =
   | {
@@ -26,12 +28,14 @@ export type JumpTarget =
         | 'dashboard'
         | 'monitoring'
         | 'report'
+        | 'reportCards'
         | 'bank'
         | 'grading'
         | 'roster'
         | 'schedule'
         | 'journal'
-        | 'users';
+        | 'users'
+        | 'settings';
     }
   | { kind: 'class'; classId: ClassId }
   | { kind: 'student'; student: Student }
@@ -144,6 +148,15 @@ export function CommandPaletteModal({
       target: { kind: 'tab', tab: 'roster' },
       searchKeywords: 'roster student siswa 名簿 学生',
     });
+    items.push({
+      id: 'page-reportCards',
+      group: lang === 'id' ? 'Halaman' : 'ページ',
+      label: lang === 'id' ? 'Rapor & Sertifikat Kelulusan' : '成績通知表・修了証書',
+      sublabel: 'Report Cards & Certificates',
+      icon: <Award className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]" />,
+      target: { kind: 'tab', tab: 'reportCards' },
+      searchKeywords: 'report card rapor sertifikat certificate 成績通知表 修了証書',
+    });
     if (isHead) {
       items.push({
         id: 'page-monitoring',
@@ -171,6 +184,15 @@ export function CommandPaletteModal({
         icon: <ShieldCheck className="w-4 h-4 text-[#1e3a5f] dark:text-sky-300" />,
         target: { kind: 'tab', tab: 'users' },
         searchKeywords: 'users roles admin sensei log ユーザー 権限 ログ',
+      });
+      items.push({
+        id: 'page-settings',
+        group: lang === 'id' ? 'Halaman' : 'ページ',
+        label: lang === 'id' ? 'Pengaturan Rapor & Sertifikat' : '通知表・修了証書設定',
+        sublabel: 'School Branding, Scale & Seals',
+        icon: <Settings className="w-4 h-4 text-[#1e3a5f] dark:text-sky-300" />,
+        target: { kind: 'tab', tab: 'settings' },
+        searchKeywords: 'settings pengaturan grade scale hanko logo 設定 通知表 修了証書 印鑑',
       });
     }
 
@@ -208,9 +230,10 @@ export function CommandPaletteModal({
       });
     }
 
-    // 4. Students
+    // 4. Students (Unassigned students visible to Admin only)
     students.forEach((stu) => {
-      const clsTheme = CLASS_THEMES[stu.classId];
+      if (!stu.classId && !isHead) return;
+      const clsTheme = getClassTheme(stu.classId);
       items.push({
         id: `stu-${stu.id}`,
         group: lang === 'id' ? 'Siswa' : '学生',
@@ -218,8 +241,8 @@ export function CommandPaletteModal({
         sublabel: `${classLabel(stu.classId, lang)}${stu.studentCode ? ` · ${stu.studentCode}` : ''}`,
         icon: <Users className="w-4 h-4 text-slate-600 dark:text-slate-300" />,
         target: { kind: 'student', student: stu },
-        searchKeywords: `${stu.name} ${stu.studentCode} ${stu.classId} ${stu.targetGoal || ''}`,
-        classDot: clsTheme.dotColor,
+        searchKeywords: `${stu.name} ${stu.studentCode} ${stu.classId || 'unassigned'} ${stu.targetGoal || ''}`,
+        classDot: clsTheme?.dotColor,
       });
     });
 

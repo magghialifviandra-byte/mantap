@@ -70,6 +70,16 @@ function actionLabel(actionType: ActivityActionType, lang: LanguageMode): string
     weekly_report_submit: { ja: '週報提出', id: 'Kirim Laporan Mingguan' },
     alert_handle: { ja: 'アラート対応', id: 'Tangani Peringatan' },
     threshold_update: { ja: '基準値更新', id: 'Update Ambang Batas' },
+    report_card_draft: { ja: '通知表下書き作成', id: 'Buat Draf Rapor' },
+    report_card_submit: { ja: '通知表提出', id: 'Ajukan Rapor' },
+    report_card_finalize: { ja: '通知表確定', id: 'Finalisasi Rapor' },
+    report_card_unlock: { ja: '通知表ロック解除', id: 'Buka Kunci Rapor' },
+    report_card_reissue: { ja: '通知表再発行', id: 'Terbitkan Ulang Rapor' },
+    certificate_issue: { ja: '修了証書発行', id: 'Terbitkan Sertifikat' },
+    certificate_override: { ja: '修了証書例外承認', id: 'Override Sertifikat' },
+    certificate_revoke: { ja: '修了証書失効', id: 'Cabut Sertifikat' },
+    certificate_reissue: { ja: '修了証書再発行', id: 'Terbitkan Ulang Sertifikat' },
+    school_settings_update: { ja: '通知表・証書設定更新', id: 'Update Pengaturan Sekolah' },
   };
   const entry = map[actionType];
   return entry ? (lang === 'id' ? entry.id : entry.ja) : actionType;
@@ -730,6 +740,16 @@ export function UsersRolesView({
             <option value="data_create">{actionLabel('data_create', lang)}</option>
             <option value="data_update">{actionLabel('data_update', lang)}</option>
             <option value="data_delete">{actionLabel('data_delete', lang)}</option>
+            <option value="report_card_draft">{actionLabel('report_card_draft', lang)}</option>
+            <option value="report_card_submit">{actionLabel('report_card_submit', lang)}</option>
+            <option value="report_card_finalize">{actionLabel('report_card_finalize', lang)}</option>
+            <option value="report_card_unlock">{actionLabel('report_card_unlock', lang)}</option>
+            <option value="report_card_reissue">{actionLabel('report_card_reissue', lang)}</option>
+            <option value="certificate_issue">{actionLabel('certificate_issue', lang)}</option>
+            <option value="certificate_override">{actionLabel('certificate_override', lang)}</option>
+            <option value="certificate_revoke">{actionLabel('certificate_revoke', lang)}</option>
+            <option value="certificate_reissue">{actionLabel('certificate_reissue', lang)}</option>
+            <option value="school_settings_update">{actionLabel('school_settings_update', lang)}</option>
           </select>
         </div>
 
